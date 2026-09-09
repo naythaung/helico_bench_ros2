@@ -1,0 +1,222 @@
+<?xml version="1.0"?>
+<robot name="meca500_scene" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- Pull in the robot's own macro from the meca500_description package -->
+  <xacro:include filename="$(find meca500_description)/urdf/meca500_macro.xacro" />
+
+  <!-- Shared reference frame = your Onshape assembly origin -->
+  <link name="world"/>
+  <link name="scene_frame"/>
+
+  <joint name="world_to_scene" type="fixed">
+    <parent link="world"/>
+    <child link="scene_frame"/>
+    <origin xyz="0 0 0" rpy="-1.5708 0 0"/>
+  </joint>
+
+  <!-- Robot, offset from world by the measured mount position -->
+  <xacro:meca500 parent="scene_frame">
+    <origin xyz="-0.2375 -0.0127 -0.0625" rpy="1.5708 0 0"/>
+  </xacro:meca500>
+
+    <!-- Camera adapter, bolted to the robot's end-effector flange (link_6) -->
+  <link name="camera_adapter_bottom">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://meca500_scene_description/meshes/bottom.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="adapter_yellow">
+        <color rgba="0.9 0.8 0.1 1.0"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://meca500_scene_description/meshes/bottom.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+
+  </link>
+
+  <joint name="link6_to_camera_adapter_bottom" type="fixed">
+    <parent link="link_6"/>
+    <child link="camera_adapter_bottom"/>
+    <origin xyz="0 0 0" rpy="0 0 3.14159"/>
+  </joint>
+
+    <!-- Camera adapter top piece (the mounting lip/stop), fixed to the bottom piece -->
+  <link name="camera_adapter_top">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://meca500_scene_description/meshes/top.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="adapter_yellow">
+        <color rgba="0.9 0.8 0.1 1.0"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://meca500_scene_description/meshes/top.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="adapter_bottom_to_top" type="fixed">
+    <parent link="camera_adapter_bottom"/>
+    <child link="camera_adapter_top"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Camera body -->
+  <link name="camera_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <geometry>
+        <mesh filename="package://meca500_scene_description/meshes/camera.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="camera_blue">
+        <color rgba="0.1 0.4 0.9 1.0"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <geometry>
+        <mesh filename="package://meca500_scene_description/meshes/camera.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="adapter_to_camera" type="fixed">
+    <parent link="camera_adapter_bottom"/>
+    <child link="camera_link"/>
+    <origin xyz="0 0 0.01624" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Optical frame: the actual point/orientation the lens looks from,
+       using the standard ROS camera convention (Z forward, X right, Y down).
+       You WILL need to nudge xyz here once you measure the lens's real
+       offset from the camera body's mounting face. -->
+  <link name="camera_optical_frame"/>
+  <joint name="camera_to_optical" type="fixed">
+    <parent link="camera_link"/>
+    <child link="camera_optical_frame"/>
+    <origin xyz="0 0 0.1038" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Breadboard: mesh already carries its correct in-place position, so zero offset -->
+  <link name="breadboard">
+    <visual>
+      <origin xyz="0 0 0" rpy="3.14159 0 0"/>
+      <geometry>
+        <mesh filename="package://meca500_scene_description/meshes/breadboard.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="board_grey">
+        <color rgba="0.5 0.5 0.55 1.0"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="3.14159 0 0"/>
+      <geometry>
+        <mesh filename="package://meca500_scene_description/meshes/breadboard.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+
+  </link>
+
+  <joint name="scene_to_breadboard" type="fixed">
+    <parent link="scene_frame"/>
+    <child link="breadboard"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Phantom: same idea -->
+  <link name="phantom">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://meca500_scene_description/meshes/phantom.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="phantom_color">
+        <color rgba="0.8 0.3 0.2 1.0"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://meca500_scene_description/meshes/phantom.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+
+  </link>
+  
+  <joint name="world_to_phantom" type="fixed">
+    <parent link="scene_frame"/>
+    <child link="phantom"/>
+    <origin xyz="0.164 -0.0427 0 " rpy="1.5708 3.14159 3.14159"/>
+  </joint>
+
+  <!-- Laptop simulation: joint commands become simulated positions -->
+  <xacro:macro name="mock_joint" params="name">
+    <joint name="${name}">
+      <command_interface name="position"/>
+      <state_interface name="position">
+        <param name="initial_value">0.0</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+  </xacro:macro>
+
+  <ros2_control name="Meca500MockSystem" type="system">
+    <hardware>
+      <plugin>mock_components/GenericSystem</plugin>
+    </hardware>
+
+    <xacro:mock_joint name="meca_axis_1"/>
+    <xacro:mock_joint name="meca_axis_2"/>
+    <xacro:mock_joint name="meca_axis_3"/>
+    <xacro:mock_joint name="meca_axis_4"/>
+    <xacro:mock_joint name="meca_axis_5"/>
+    <xacro:mock_joint name="meca_axis_6"/>
+  </ros2_control>
+
+<link name="onshape_breadboard">
+  <visual>
+    <geometry>
+      <mesh filename="package://meca500_scene_description/meshes/onshape/MB3060_M___Aluminium_Breadboard_300_x_600_x_12_7mm_MB3030_M_1.stl"/>
+    </geometry>
+  </visual>
+</link>
+
+<joint name="scene_to_onshape_breadboard" type="fixed">
+  <parent link="scene_frame"/>
+  <child link="onshape_breadboard"/>
+  <origin xyz="0 0 0" rpy="0 0 0"/>
+</joint>
+
+  <!-- Reach envelope reference (Mecademic-published workspace shape), translucent
+  <link name="workspace_envelope">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://meca500_scene_description/meshes/workspace.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="envelope_translucent">
+        <color rgba="0.2 0.6 0.9 0.12"/>
+      </material>
+    </visual>
+  </link>
+  <joint name="base_to_workspace_envelope" type="fixed">
+    <parent link="base_link"/>
+    <child link="workspace_envelope"/>
+    <origin xyz="0 0 0" rpy="1.5708 0 3.14159"/>
+  </joint>
+</robot> -->
+</robot>
