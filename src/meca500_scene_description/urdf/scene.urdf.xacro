@@ -15,10 +15,134 @@
     <origin xyz="0 0 0" rpy="0 0 0"/>
   </joint>
 
-  <!-- Dio breadboard will be added here -->
+  <!--
+    Dio bench breadboard.
 
-  <!-- Trusted ROS Meca500 will be added here -->
+    This mesh comes from the original Onshape URDF export and is the
+    authoritative geometric reference for positioning the physical bench.
 
-  <!-- Mock ros2_control for simulation will stay here -->
+    No manually tuned RViz offset is applied here.
+  -->
+  <link name="dio_breadboard">
+    <visual>
+      <origin xyz="0 -0.0127 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://meca500_scene_description/meshes/onshape/MB3060_M___Aluminium_Breadboard_300_x_600_x_12_7mm_MB3030_M_1.stl"/>
+      </geometry>
+      <material name="breadboard_grey">
+        <color rgba="0.55 0.55 0.55 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <!-- ========================================================= -->
+  <!-- Helico fixture bases                                      -->
+  <!--                                                          -->
+  <!-- Derived directly from Dio's Onshape URDF.                -->
+  <!-- Original Onshape names: base, base_1, base_2.            -->
+  <!-- Renamed here to avoid ambiguous CAD-generated names.     -->
+  <!-- ========================================================= -->
+
+  <!-- Fixture 1 -->
+  <link name="fixture_1_base">
+    <visual>
+      <origin xyz="0.0125 0.0125 0.025" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://meca500_scene_description/meshes/onshape/Base.stl"/>
+      </geometry>
+    </visual>
+  </link>
+
+  <joint name="breadboard_to_fixture_1_base" type="fixed">
+    <parent link="dio_breadboard"/>
+    <child link="fixture_1_base"/>
+    <origin xyz="-0.0375 -0.0127 -0.0125"
+            rpy="1.5708 0 0"/>
+  </joint>
+
+
+  <!-- Fixture 2 -->
+  <link name="fixture_2_base">
+    <visual>
+      <origin xyz="-0.0125 0.0125 0.025" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://meca500_scene_description/meshes/onshape/Base.stl"/>
+      </geometry>
+    </visual>
+  </link>
+
+  <joint name="breadboard_to_fixture_2_base" type="fixed">
+    <parent link="dio_breadboard"/>
+    <child link="fixture_2_base"/>
+    <origin xyz="-0.0125 -0.0127 -0.0875"
+            rpy="1.5708 0 0"/>
+  </joint>
+
+
+  <!-- Fixture 3 -->
+  <link name="fixture_3_base">
+    <visual>
+      <origin xyz="-0.0125 0.0125 0.025" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://meca500_scene_description/meshes/onshape/Base.stl"/>
+      </geometry>
+    </visual>
+  </link>
+
+  <joint name="breadboard_to_fixture_3_base" type="fixed">
+    <parent link="dio_breadboard"/>
+    <child link="fixture_3_base"/>
+    <origin xyz="-0.0125 -0.0127 0.0625"
+            rpy="1.5708 0 0"/>
+  </joint>
+
+<joint name="bench_to_breadboard" type="fixed">
+  <parent link="bench_frame"/>
+  <child link="dio_breadboard"/>
+  <origin xyz="0 0 0" rpy="-1.5708 0 0"/>
+</joint>
+
+<xacro:meca500 parent="dio_breadboard">
+  <!--
+    Trusted ROS Meca500 kinematic model positioned using Dio's CAD.
+
+    Placement derived from rigid registration of Dio's Base_1.stl
+    against the trusted ROS Meca500 base mesh.
+
+    Do not tune this transform manually in RViz.
+  -->
+  <origin xyz="-0.175 -0.0127 -0.025"
+          rpy="1.5708 0 0"/>
+</xacro:meca500>
+
+  <!-- ========================================================= -->
+  <!-- Mock ros2_control                                         -->
+  <!-- Provides simulated joint states for RViz / MoveIt.        -->
+  <!-- Replace with the physical Meca500 hardware interface      -->
+  <!-- when transitioning to the real robot.                     -->
+  <!-- ========================================================= -->
+
+  <xacro:macro name="mock_joint" params="name">
+    <joint name="${name}">
+      <command_interface name="position"/>
+      <state_interface name="position">
+        <param name="initial_value">0.0</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+  </xacro:macro>
+
+  <ros2_control name="Meca500MockSystem" type="system">
+    <hardware>
+      <plugin>mock_components/GenericSystem</plugin>
+    </hardware>
+
+    <xacro:mock_joint name="meca_axis_1"/>
+    <xacro:mock_joint name="meca_axis_2"/>
+    <xacro:mock_joint name="meca_axis_3"/>
+    <xacro:mock_joint name="meca_axis_4"/>
+    <xacro:mock_joint name="meca_axis_5"/>
+    <xacro:mock_joint name="meca_axis_6"/>
+  </ros2_control>
 
 </robot>
