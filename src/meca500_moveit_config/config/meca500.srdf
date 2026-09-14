@@ -1,8 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <robot name="helico_bench">
+
+    <!-- ========================================================= -->
+    <!-- MoveIt planning group                                     -->
+    <!-- ========================================================= -->
+
     <group name="meca_arm">
         <chain base_link="base_link" tip_link="link_6"/>
     </group>
+
+
+    <!-- ========================================================= -->
+    <!-- Named robot states                                        -->
+    <!-- ========================================================= -->
 
     <group_state name="home" group="meca_arm">
         <joint name="meca_axis_1" value="0"/>
@@ -13,16 +23,188 @@
         <joint name="meca_axis_6" value="0"/>
     </group_state>
 
-    <disable_collisions link1="base_link" link2="link_1" reason="Adjacent"/>
-    <disable_collisions link1="base_link" link2="link_2" reason="Never"/>
-    <disable_collisions link1="link_1" link2="link_2" reason="Adjacent"/>
-    <disable_collisions link1="link_1" link2="link_3" reason="Never"/>
-    <disable_collisions link1="link_2" link2="link_3" reason="Adjacent"/>
-    <disable_collisions link1="link_3" link2="link_4" reason="Adjacent"/>
-    <disable_collisions link1="link_3" link2="link_5" reason="Never"/>
-    <disable_collisions link1="link_3" link2="link_6" reason="Never"/>
-    <disable_collisions link1="link_4" link2="link_5" reason="Adjacent"/>
-    <disable_collisions link1="link_4" link2="link_6" reason="Never"/>
-    <disable_collisions link1="link_5" link2="link_6" reason="Adjacent"/>
+
+    <!-- ========================================================= -->
+    <!-- Meca500 self-collision exclusions                         -->
+    <!--                                                          -->
+    <!-- Adjacent: links are physically connected                  -->
+    <!-- Never: validated robot link pairs which cannot collide    -->
+    <!-- during normal robot motion                                -->
+    <!-- ========================================================= -->
+
+    <!-- Meca500 base is physically mounted to the breadboard -->
+    <disable_collisions
+        link1="base_link"
+        link2="bench_breadboard"
+        reason="Adjacent"/>
+
+    <disable_collisions
+        link1="base_link"
+        link2="link_1"
+        reason="Adjacent"/>
+
+    <disable_collisions
+        link1="base_link"
+        link2="link_2"
+        reason="Never"/>
+
+    <disable_collisions
+        link1="link_1"
+        link2="link_2"
+        reason="Adjacent"/>
+
+    <disable_collisions
+        link1="link_1"
+        link2="link_3"
+        reason="Never"/>
+
+    <disable_collisions
+        link1="link_2"
+        link2="link_3"
+        reason="Adjacent"/>
+
+    <disable_collisions
+        link1="link_3"
+        link2="link_4"
+        reason="Adjacent"/>
+
+    <disable_collisions
+        link1="link_3"
+        link2="link_5"
+        reason="Never"/>
+
+    <disable_collisions
+        link1="link_3"
+        link2="link_6"
+        reason="Never"/>
+
+    <disable_collisions
+        link1="link_4"
+        link2="link_5"
+        reason="Adjacent"/>
+
+    <disable_collisions
+        link1="link_4"
+        link2="link_6"
+        reason="Never"/>
+
+    <disable_collisions
+        link1="link_5"
+        link2="link_6"
+        reason="Adjacent"/>
+
+
+    <!-- ========================================================= -->
+    <!-- Link 6 measurement tool                                  -->
+    <!--                                                          -->
+    <!-- These components form one rigid physical assembly.        -->
+    <!-- Collision checking between directly mounted neighbours    -->
+    <!-- is therefore disabled.                                   -->
+    <!--                                                          -->
+    <!-- IMPORTANT: collisions between the tool and bench remain   -->
+    <!-- ENABLED.                                                  -->
+    <!-- ========================================================= -->
+
+    <!-- Meca flange -> main tool mount -->
+    <disable_collisions
+        link1="link_6"
+        link2="tools_mount"
+        reason="Adjacent"/>
+
+    <!-- Main tool mount -> laser mount -->
+    <disable_collisions
+        link1="tools_mount"
+        link2="laser_sensor_mount"
+        reason="Adjacent"/>
+
+    <!-- Laser mount -> laser sensor -->
+    <disable_collisions
+        link1="laser_sensor_mount"
+        link2="laser_sensor"
+        reason="Adjacent"/>
+
+    <!-- Main tool mount -> force sensor -->
+    <disable_collisions
+        link1="tools_mount"
+        link2="force_sensor"
+        reason="Adjacent"/>
+
+    <!-- Force sensor -> force poker -->
+    <disable_collisions
+        link1="force_sensor"
+        link2="force_poker"
+        reason="Adjacent"/>
+
+    <!-- Main tool mount -> AprilTag mount -->
+    <disable_collisions
+        link1="tools_mount"
+        link2="april_tag_mount"
+        reason="Adjacent"/>
+
+
+    <!-- ========================================================= -->
+    <!-- 3.5 mm balloon tip station                               -->
+    <!-- ========================================================= -->
+
+    <!-- Station base is physically mounted on breadboard -->
+    <disable_collisions
+        link1="bench_breadboard"
+        link2="tip_station_3p5mm_base"
+        reason="Adjacent"/>
+
+    <!-- Station base -> coupling -->
+    <disable_collisions
+        link1="tip_station_3p5mm_base"
+        link2="tip_station_3p5mm_coupling_base"
+        reason="Adjacent"/>
+
+    <!-- Coupling -> balloon holder -->
+    <disable_collisions
+        link1="tip_station_3p5mm_coupling_base"
+        link2="tip_station_3p5mm_holder"
+        reason="Adjacent"/>
+
+
+    <!-- ========================================================= -->
+    <!-- 4 mm balloon tip station                                 -->
+    <!-- ========================================================= -->
+
+    <!-- Station base is physically mounted on breadboard -->
+    <disable_collisions
+        link1="bench_breadboard"
+        link2="tip_station_4mm_base"
+        reason="Adjacent"/>
+
+    <!-- Station base -> coupling -->
+    <disable_collisions
+        link1="tip_station_4mm_base"
+        link2="tip_station_4mm_coupling_base"
+        reason="Adjacent"/>
+
+    <!-- Coupling -> balloon holder -->
+    <disable_collisions
+        link1="tip_station_4mm_coupling_base"
+        link2="tip_station_4mm_holder"
+        reason="Adjacent"/>
+
+
+    <!-- ========================================================= -->
+    <!-- 5 mm balloon tip station                                  -->                                             -->
+    <!-- ========================================================= -->
+
+    <disable_collisions
+        link1="bench_breadboard"
+        link2="tip_station_5mm_base"
+        reason="Adjacent"/>
+
+    <disable_collisions
+        link1="tip_station_5mm_base"
+        link2="tip_station_5mm_coupling_base"
+        reason="Adjacent"/>
+
+    <disable_collisions
+        link1="tip_station_5mm_coupling_base"
+        link2="tip_station_5mm_holder"
+        reason="Adjacent"/>
 
 </robot>
