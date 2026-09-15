@@ -1,0 +1,104 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!--
+    Visual-only representation of the Helico balloon stations.
+
+    IMPORTANT:
+    These links contain NO collision geometry.
+
+    Physical station locations are defined by:
+      urdf/frames/bench_frames.xacro
+
+    MoveIt collision geometry is loaded separately into the
+    PlanningScene by environment_loader.cpp.
+  -->
+
+  <xacro:macro name="station_visual"
+    params="prefix parent base_visual_x coupling_x">
+
+    <!-- ====================================================== -->
+    <!-- Base                                                   -->
+    <!-- ====================================================== -->
+
+    <link name="${prefix}_base_visual">
+      <visual>
+        <origin xyz="${base_visual_x} 0.0125 0.025"
+          rpy="0 0 0" />
+
+        <geometry>
+          <mesh filename="package://meca500_scene_description/meshes/onshape/Base.stl" />
+        </geometry>
+
+        <material name="${prefix}_base_colour">
+          <color rgba="0.4 0.7 0.9 1.0" />
+        </material>
+      </visual>
+    </link>
+
+    <joint name="${prefix}_frame_to_base_visual" type="fixed">
+      <parent link="${parent}" />
+      <child link="${prefix}_base_visual" />
+      <origin xyz="0 0 0"
+        rpy="0 0 0" />
+    </joint>
+
+
+    <!-- ====================================================== -->
+    <!-- Coupling base                                          -->
+    <!-- ====================================================== -->
+
+    <link name="${prefix}_coupling_visual">
+      <visual>
+        <origin xyz="-0.006 0 0"
+          rpy="0 0 0" />
+
+        <geometry>
+          <mesh filename="package://meca500_scene_description/meshes/onshape/Coupling_base.stl" />
+        </geometry>
+
+        <material name="${prefix}_coupling_colour">
+          <color rgba="0.1 0.3 0.8 1.0" />
+        </material>
+      </visual>
+    </link>
+
+    <joint name="${prefix}_base_to_coupling_visual" type="fixed">
+      <parent link="${prefix}_base_visual" />
+      <child link="${prefix}_coupling_visual" />
+
+      <origin xyz="${coupling_x} 0.0125 0.025"
+        rpy="0 0 0" />
+    </joint>
+
+
+    <!-- ====================================================== -->
+    <!-- 3D printed holder                                      -->
+    <!-- ====================================================== -->
+
+    <link name="${prefix}_holder_visual">
+      <visual>
+        <origin xyz="0 -0.0123 0"
+          rpy="0 0 0" />
+
+        <geometry>
+          <mesh filename="package://meca500_scene_description/meshes/onshape/_3D_printed.stl" />
+        </geometry>
+
+        <material name="${prefix}_holder_colour">
+          <color rgba="0.95 0.75 0.20 1.0" />
+        </material>
+      </visual>
+    </link>
+
+    <joint name="${prefix}_coupling_to_holder_visual" type="fixed">
+      <parent link="${prefix}_coupling_visual" />
+      <child link="${prefix}_holder_visual" />
+
+      <origin xyz="-0.006 0 0.005"
+        rpy="-1.5708 0 1.5708" />
+    </joint>
+
+  </xacro:macro>
+
+</robot>

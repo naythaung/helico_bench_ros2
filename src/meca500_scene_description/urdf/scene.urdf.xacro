@@ -2,350 +2,44 @@
 <robot name="helico_bench" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
   <!-- Trusted Meca500 robot model -->
-  <xacro:include filename="$(find meca500_description)/urdf/meca500_macro.xacro"/>
+  <xacro:include filename="$(find meca500_description)/urdf/meca500_macro.xacro" />
 
-  <!-- Global reference frame for the Helico bench CAD -->
-  <link name="world"/>
+  <!-- Helico bench frames and visual environment -->
+  <xacro:include filename="$(find meca500_scene_description)/urdf/frames/bench_frames.xacro" />
+  <xacro:include filename="$(find meca500_scene_description)/urdf/visuals/breadboard_visual.xacro" />
+  <xacro:include filename="$(find meca500_scene_description)/urdf/visuals/station_visuals.xacro" />
 
-  <link name="bench_frame"/>
+  <!-- Global root -->
+  <link name="world" />
 
-  <joint name="world_to_bench" type="fixed">
-    <parent link="world"/>
-    <child link="bench_frame"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-  </joint>
+  <!-- Visual only. Collision version is loaded into MoveIt PlanningScene. -->
+  <xacro:breadboard_visual parent="bench_breadboard" />
 
-  <!--
-    Helico bench breadboard.
+  <!-- 3.5 mm station -->
+  <xacro:station_visual
+    prefix="tip_station_3p5mm"
+    parent="tip_station_3p5mm_frame"
+    base_visual_x="-0.0125"
+    coupling_x="-0.0065" />
 
-    This mesh comes from the original Onshape URDF export and is the
-    authoritative geometric reference for positioning the physical bench.
+  <!-- 4 mm station -->
+  <xacro:station_visual
+    prefix="tip_station_4mm"
+    parent="tip_station_4mm_frame"
+    base_visual_x="0.0125"
+    coupling_x="0.0185" />
 
-    No manually tuned RViz offset is applied here.
-  -->
-  <link name="bench_breadboard">
-    <visual>
-      <origin xyz="0 -0.0127 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/MB3060_M___Aluminium_Breadboard_300_x_600_x_12_7mm_MB3030_M_1.stl"/>
-      </geometry>
-      <material name="breadboard_grey">
-        <color rgba="0.55 0.55 0.55 1.0"/>
-      </material>
-    </visual>
+  <!-- 5 mm station -->
+  <xacro:station_visual
+    prefix="tip_station_5mm"
+    parent="tip_station_5mm_frame"
+    base_visual_x="-0.0125"
+    coupling_x="-0.0065" />
 
-    <collision>
-      <origin xyz="0 -0.0127 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/MB3060_M___Aluminium_Breadboard_300_x_600_x_12_7mm_MB3030_M_1.stl"/>
-      </geometry>
-    </collision>
-  </link>
-  
-  <!-- ========================================================= -->
-  <!-- Helico balloon tip stations                              -->
-  <!--                                                          -->
-  <!-- Ordered physically from robot-right to robot-left:        -->
-  <!--   3.5 mm -> 4 mm -> 5 mm                                 -->
-  <!--                                                          -->
-  <!-- Current station geometry is a PLACEHOLDER representation. -->
-  <!-- Repeated CAD meshes are used where the final Onshape CAD  -->
-  <!-- has not yet been completed.                               -->
-  <!--                                                          -->
-  <!-- Final station geometry should be updated from the latest  -->
-  <!-- Onshape assembly when available.                          -->
-  <!--                                                          -->
-  <!-- Helico CAD mapping:                                       -->
-  <!--   base_1 -> 3.5 mm station                                -->
-  <!--   base   -> 4 mm station                                  -->
-  <!--   base_2 -> 5 mm station                                  -->
-  <!-- ========================================================= -->
-
-
-  <!-- ========================================================= -->
-  <!-- 3.5 mm tip station                                        -->
-  <!-- Robot-right station                                       -->
-  <!-- ========================================================= -->
-
-  <link name="tip_station_3p5mm_base">
-    <visual>
-      <origin xyz="-0.0125 0.0125 0.025" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/Base.stl"/>
-      </geometry>
-      <material name="base_colour">
-        <color rgba="0.4 0.7 0.9 1.0"/>
-      </material>
-    </visual>
-
-    <collision>
-      <origin xyz="-0.0125 0.0125 0.025" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/Base.stl"/>
-      </geometry>
-    </collision>
-  </link>
-
-  <joint name="breadboard_to_tip_station_3p5mm_base" type="fixed">
-    <parent link="bench_breadboard"/>
-    <child link="tip_station_3p5mm_base"/>
-    <origin xyz="-0.0125 -0.0127 -0.0875"
-            rpy="1.5708 0 0"/>
-  </joint>
-
-
-  <link name="tip_station_3p5mm_coupling_base">
-    <visual>
-      <origin xyz="-0.006 0 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/Coupling_base.stl"/>
-      </geometry>
-      <material name="coupling_colour">
-        <color rgba="0.1 0.3 0.8 1.0"/>
-      </material>
-    </visual>
-
-    <collision>
-      <origin xyz="-0.006 0 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/Coupling_base.stl"/>
-      </geometry>
-    </collision>
-  </link>
-
-  <joint name="tip_station_3p5mm_base_to_coupling_base" type="fixed">
-    <parent link="tip_station_3p5mm_base"/>
-    <child link="tip_station_3p5mm_coupling_base"/>
-    <origin xyz="-0.0065 0.0125 0.025"
-            rpy="0 0 0"/>
-  </joint>
-
-
-  <link name="tip_station_3p5mm_holder">
-    <visual>
-      <origin xyz="0 -0.0123 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/_3D_printed.stl"/>
-      </geometry>
-      <material name="holder_colour">
-        <color rgba="0.95 0.75 0.20 1.0"/>
-      </material>
-    </visual>
-
-    <collision>
-      <origin xyz="0 -0.0123 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/_3D_printed.stl"/>
-      </geometry>
-    </collision>
-  </link>
-
-  <joint name="tip_station_3p5mm_coupling_base_to_holder" type="fixed">
-    <parent link="tip_station_3p5mm_coupling_base"/>
-    <child link="tip_station_3p5mm_holder"/>
-    <origin xyz="-0.006 0 0.005"
-            rpy="-1.5708 0 1.5708"/>
-  </joint>
-
-
-  <!-- ========================================================= -->
-  <!-- 4 mm tip station                                          -->
-  <!-- Middle station                                            -->
-  <!-- ========================================================= -->
-
-  <link name="tip_station_4mm_base">
-    <visual>
-      <origin xyz="0.0125 0.0125 0.025" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/Base.stl"/>
-      </geometry>
-      <material name="base_colour">
-        <color rgba="0.4 0.7 0.9 1.0"/>
-      </material>
-    </visual>
-
-    <collision>
-      <origin xyz="0.0125 0.0125 0.025" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/Base.stl"/>
-      </geometry>
-    </collision>
-  </link>
-
-  <joint name="breadboard_to_tip_station_4mm_base" type="fixed">
-    <parent link="bench_breadboard"/>
-    <child link="tip_station_4mm_base"/>
-    <origin xyz="-0.0375 -0.0127 -0.0125"
-            rpy="1.5708 0 0"/>
-  </joint>
-
-
-  <link name="tip_station_4mm_coupling_base">
-    <visual>
-      <origin xyz="-0.006 0 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/Coupling_base.stl"/>
-      </geometry>
-      <material name="coupling_colour">
-        <color rgba="0.1 0.3 0.8 1.0"/>
-      </material>
-    </visual>
-
-    <collision>
-      <origin xyz="-0.006 0 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/Coupling_base.stl"/>
-      </geometry>
-    </collision>
-  </link>
-
-  <joint name="tip_station_4mm_base_to_coupling_base" type="fixed">
-    <parent link="tip_station_4mm_base"/>
-    <child link="tip_station_4mm_coupling_base"/>
-    <origin xyz="0.0185 0.0125 0.025"
-            rpy="0 0 0"/>
-  </joint>
-
-
-  <link name="tip_station_4mm_holder">
-    <visual>
-      <origin xyz="0 -0.0123 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/_3D_printed.stl"/>
-      </geometry>
-      <material name="holder_colour">
-        <color rgba="0.95 0.75 0.20 1.0"/>
-      </material>
-    </visual>
-
-    <collision>
-      <origin xyz="0 -0.0123 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/_3D_printed.stl"/>
-      </geometry>
-    </collision>
-  </link>
-
-  <joint name="tip_station_4mm_coupling_base_to_holder" type="fixed">
-    <parent link="tip_station_4mm_coupling_base"/>
-    <child link="tip_station_4mm_holder"/>
-    <origin xyz="-0.006 0 0.005"
-            rpy="-1.5708 0 1.5708"/>
-  </joint>
-
-
-  <!-- ========================================================= -->
-  <!-- 5 mm tip station                                          -->
-  <!-- Robot-left station                                        -->
-  <!--                                                          -->
-  <!-- PLACEHOLDER: coupling and holder reuse the existing        -->
-  <!-- station meshes until final Onshape CAD is available.       -->
-  <!-- ========================================================= -->
-
-  <link name="tip_station_5mm_base">
-    <visual>
-      <origin xyz="-0.0125 0.0125 0.025" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/Base.stl"/>
-      </geometry>
-      <material name="base_colour">
-        <color rgba="0.4 0.7 0.9 1.0"/>
-      </material>
-    </visual>
-
-    <collision>
-      <origin xyz="-0.0125 0.0125 0.025" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/Base.stl"/>
-      </geometry>
-    </collision>
-  </link>
-
-  <joint name="breadboard_to_tip_station_5mm_base" type="fixed">
-    <parent link="bench_breadboard"/>
-    <child link="tip_station_5mm_base"/>
-    <origin xyz="-0.0125 -0.0127 0.0625"
-            rpy="1.5708 0 0"/>
-  </joint>
-
-
-  <link name="tip_station_5mm_coupling_base">
-    <visual>
-      <origin xyz="-0.006 0 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/Coupling_base.stl"/>
-      </geometry>
-      <material name="coupling_colour">
-        <color rgba="0.1 0.3 0.8 1.0"/>
-      </material>
-    </visual>
-
-    <collision>
-      <origin xyz="-0.006 0 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/Coupling_base.stl"/>
-      </geometry>
-    </collision>
-  </link>
-
-  <joint name="tip_station_5mm_base_to_coupling_base" type="fixed">
-    <parent link="tip_station_5mm_base"/>
-    <child link="tip_station_5mm_coupling_base"/>
-    <origin xyz="-0.0065 0.0125 0.025"
-            rpy="0 0 0"/>
-  </joint>
-
-
-  <link name="tip_station_5mm_holder">
-    <visual>
-      <origin xyz="0 -0.0123 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/_3D_printed.stl"/>
-      </geometry>
-      <material name="holder_colour">
-        <color rgba="0.95 0.75 0.20 1.0"/>
-      </material>
-    </visual>
-
-    <collision>
-      <origin xyz="0 -0.0123 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/_3D_printed.stl"/>
-      </geometry>
-    </collision>
-  </link>
-
-  <joint name="tip_station_5mm_coupling_base_to_holder" type="fixed">
-    <parent link="tip_station_5mm_coupling_base"/>
-    <child link="tip_station_5mm_holder"/>
-    <origin xyz="-0.006 0 0.005"
-            rpy="-1.5708 0 1.5708"/>
-  </joint>
-
-
-  <!-- ========================================================= -->
-  <!-- Breadboard attachment                                     -->
-  <!-- ========================================================= -->
-
-  <joint name="bench_to_breadboard" type="fixed">
-    <parent link="bench_frame"/>
-    <child link="bench_breadboard"/>
-    <origin xyz="0 0 0"
-            rpy="-1.5708 0 0"/>
-  </joint>
-
-<xacro:meca500 parent="bench_breadboard">
-  <!--
-    Trusted ROS Meca500 kinematic model positioned using Helico's CAD.
-
-    Placement derived from rigid registration of Helico's Base_1.stl
-    against the trusted ROS Meca500 base mesh.
-
-    Do not tune this transform manually in RViz.
-  -->
-  <origin xyz="-0.175 -0.0127 -0.025"
-          rpy="1.5708 0 0"/>
-</xacro:meca500>
+  <xacro:meca500 parent="bench_breadboard">
+    <origin xyz="-0.175 -0.0127 -0.025"
+      rpy="1.5708 0 0" />
+  </xacro:meca500>
 
   <!-- ========================================================= -->
   <!-- Link 6 measurement tool                                  -->
@@ -371,29 +65,29 @@
   <link name="tools_mount">
     <visual>
       <origin xyz="-0.00548008 0 -0.00548008"
-              rpy="0 0 0"/>
+        rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/tools_mount.stl"/>
+        <mesh filename="package://meca500_scene_description/meshes/onshape/tools_mount.stl" />
       </geometry>
       <material name="tools_mount_colour">
-        <color rgba="0.682353 0.333333 0.737255 1"/>
+        <color rgba="0.682353 0.333333 0.737255 1" />
       </material>
     </visual>
 
     <collision>
-    <origin xyz="-0.00548008 0 -0.00548008"
-            rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="package://meca500_scene_description/meshes/onshape/tools_mount.stl"/>
-    </geometry>
+      <origin xyz="-0.00548008 0 -0.00548008"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://meca500_scene_description/meshes/onshape/tools_mount.stl" />
+      </geometry>
     </collision>
   </link>
 
   <joint name="link_6_to_tools_mount" type="fixed">
-    <parent link="link_6"/>
-    <child link="tools_mount"/>
+    <parent link="link_6" />
+    <child link="tools_mount" />
     <origin xyz="-0.00548008 0.00548008 0"
-            rpy="-1.5708 0 1.5708"/>
+      rpy="-1.5708 0 1.5708" />
   </joint>
 
 
@@ -401,29 +95,29 @@
   <link name="laser_sensor_mount">
     <visual>
       <origin xyz="-0.00273616 -0.00751754 -0.0575"
-              rpy="0 0 0"/>
+        rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/laser_sensor_mount.stl"/>
+        <mesh filename="package://meca500_scene_description/meshes/onshape/laser_sensor_mount.stl" />
       </geometry>
       <material name="laser_sensor_mount_colour">
-        <color rgba="0.729412 0.25098 0.105882 1"/>
+        <color rgba="0.729412 0.25098 0.105882 1" />
       </material>
     </visual>
 
     <collision>
       <origin xyz="-0.00273616 -0.00751754 -0.0575"
-              rpy="0 0 0"/>
+        rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/laser_sensor_mount.stl"/>
+        <mesh filename="package://meca500_scene_description/meshes/onshape/laser_sensor_mount.stl" />
       </geometry>
-    </collision>    
+    </collision>
   </link>
 
   <joint name="tools_mount_to_laser_sensor_mount" type="fixed">
-    <parent link="tools_mount"/>
-    <child link="laser_sensor_mount"/>
+    <parent link="tools_mount" />
+    <child link="laser_sensor_mount" />
     <origin xyz="0.00203746 -0.005 0.0247125"
-            rpy="0 -1.5708 -1.5708"/>
+      rpy="0 -1.5708 -1.5708" />
   </joint>
 
 
@@ -431,29 +125,29 @@
   <link name="laser_sensor">
     <visual>
       <origin xyz="-0.01 -0.0028 0.0215"
-              rpy="0 0 0"/>
+        rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/laser_sensor.stl"/>
+        <mesh filename="package://meca500_scene_description/meshes/onshape/laser_sensor.stl" />
       </geometry>
       <material name="laser_sensor_colour">
-        <color rgba="0.615686 0.811765 0.929412 1"/>
+        <color rgba="0.615686 0.811765 0.929412 1" />
       </material>
     </visual>
 
     <collision>
       <origin xyz="-0.01 -0.0028 0.0215"
-              rpy="0 0 0"/>
+        rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/laser_sensor.stl"/>
+        <mesh filename="package://meca500_scene_description/meshes/onshape/laser_sensor.stl" />
       </geometry>
     </collision>
   </link>
 
   <joint name="laser_sensor_mount_to_laser_sensor" type="fixed">
-    <parent link="laser_sensor_mount"/>
-    <child link="laser_sensor"/>
+    <parent link="laser_sensor_mount" />
+    <child link="laser_sensor" />
     <origin xyz="0.0320138 -0.0100175 -0.0828716"
-            rpy="-1.5708 0 1.5708"/>
+      rpy="-1.5708 0 1.5708" />
   </joint>
 
 
@@ -461,29 +155,29 @@
   <link name="force_sensor">
     <visual>
       <origin xyz="0.0277 0 0"
-              rpy="0 0 0"/>
+        rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/force_sensor.stl"/>
+        <mesh filename="package://meca500_scene_description/meshes/onshape/force_sensor.stl" />
       </geometry>
       <material name="force_sensor_colour">
-        <color rgba="0.901961 0.901961 0.901961 1"/>
+        <color rgba="0.901961 0.901961 0.901961 1" />
       </material>
     </visual>
 
     <collision>
       <origin xyz="0.0277 0 0"
-              rpy="0 0 0"/>
+        rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/force_sensor.stl"/>
+        <mesh filename="package://meca500_scene_description/meshes/onshape/force_sensor.stl" />
       </geometry>
     </collision>
   </link>
 
   <joint name="tools_mount_to_force_sensor" type="fixed">
-    <parent link="tools_mount"/>
-    <child link="force_sensor"/>
+    <parent link="tools_mount" />
+    <child link="force_sensor" />
     <origin xyz="-0.00548008 -0.019 -0.0424801"
-            rpy="0 -1.5708 3.14159"/>
+      rpy="0 -1.5708 3.14159" />
   </joint>
 
 
@@ -491,29 +185,29 @@
   <link name="force_poker">
     <visual>
       <origin xyz="-0.004 0 -0.03375"
-              rpy="0 0 0"/>
+        rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/force_poker.stl"/>
+        <mesh filename="package://meca500_scene_description/meshes/onshape/force_poker.stl" />
       </geometry>
       <material name="force_poker_colour">
-        <color rgba="0.282353 0.54902 0.160784 1"/>
+        <color rgba="0.282353 0.54902 0.160784 1" />
       </material>
     </visual>
 
     <collision>
       <origin xyz="-0.004 0 -0.03375"
-              rpy="0 0 0"/>
+        rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/force_poker.stl"/>
+        <mesh filename="package://meca500_scene_description/meshes/onshape/force_poker.stl" />
       </geometry>
     </collision>
   </link>
 
   <joint name="force_sensor_to_force_poker" type="fixed">
-    <parent link="force_sensor"/>
-    <child link="force_poker"/>
+    <parent link="force_sensor" />
+    <child link="force_poker" />
     <origin xyz="0.0168 0 0"
-            rpy="-1.5708 0 -3.14159"/>
+      rpy="-1.5708 0 -3.14159" />
   </joint>
 
 
@@ -521,29 +215,29 @@
   <link name="april_tag_mount">
     <visual>
       <origin xyz="0 0.01 0"
-              rpy="0 0 0"/>
+        rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/april_tag_mount.stl"/>
+        <mesh filename="package://meca500_scene_description/meshes/onshape/april_tag_mount.stl" />
       </geometry>
       <material name="april_tag_mount_colour">
-        <color rgba="0.980392 0.713726 0.00392157 1"/>
+        <color rgba="0.980392 0.713726 0.00392157 1" />
       </material>
     </visual>
 
     <collision>
       <origin xyz="0 0.01 0"
-              rpy="0 0 0"/>
+        rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://meca500_scene_description/meshes/onshape/april_tag_mount.stl"/>
+        <mesh filename="package://meca500_scene_description/meshes/onshape/april_tag_mount.stl" />
       </geometry>
     </collision>
   </link>
 
   <joint name="tools_mount_to_april_tag_mount" type="fixed">
-    <parent link="tools_mount"/>
-    <child link="april_tag_mount"/>
+    <parent link="tools_mount" />
+    <child link="april_tag_mount" />
     <origin xyz="-0.0419365 -0.0025 -0.0154801"
-            rpy="1.5708 0 -1.5708"/>
+      rpy="1.5708 0 -1.5708" />
   </joint>
 
   <!-- ========================================================= -->
@@ -555,11 +249,11 @@
 
   <xacro:macro name="mock_joint" params="name">
     <joint name="${name}">
-      <command_interface name="position"/>
+      <command_interface name="position" />
       <state_interface name="position">
         <param name="initial_value">0.0</param>
       </state_interface>
-      <state_interface name="velocity"/>
+      <state_interface name="velocity" />
     </joint>
   </xacro:macro>
 
@@ -568,12 +262,12 @@
       <plugin>mock_components/GenericSystem</plugin>
     </hardware>
 
-    <xacro:mock_joint name="meca_axis_1"/>
-    <xacro:mock_joint name="meca_axis_2"/>
-    <xacro:mock_joint name="meca_axis_3"/>
-    <xacro:mock_joint name="meca_axis_4"/>
-    <xacro:mock_joint name="meca_axis_5"/>
-    <xacro:mock_joint name="meca_axis_6"/>
+    <xacro:mock_joint name="meca_axis_1" />
+    <xacro:mock_joint name="meca_axis_2" />
+    <xacro:mock_joint name="meca_axis_3" />
+    <xacro:mock_joint name="meca_axis_4" />
+    <xacro:mock_joint name="meca_axis_5" />
+    <xacro:mock_joint name="meca_axis_6" />
   </ros2_control>
 
 </robot>

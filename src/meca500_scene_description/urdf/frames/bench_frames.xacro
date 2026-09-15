@@ -1,0 +1,56 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!--
+    Authoritative fixed frame hierarchy for the Helico bench.
+
+    These frames define where the physical bench components are.
+    Visual and collision geometry should reference these frames rather
+    than defining independent coordinate systems.
+  -->
+
+  <link name="bench_frame" />
+
+  <joint name="world_to_bench" type="fixed">
+    <parent link="world" />
+    <child link="bench_frame" />
+    <origin xyz="0 0 0" rpy="0 0 0" />
+  </joint>
+
+  <link name="bench_breadboard" />
+
+  <joint name="bench_to_breadboard" type="fixed">
+    <parent link="bench_frame" />
+    <child link="bench_breadboard" />
+    <origin xyz="0 0 0"
+      rpy="-1.5708 0 0" />
+  </joint>
+
+  <link name="tip_station_3p5mm_frame" />
+
+  <joint name="breadboard_to_tip_station_3p5mm_frame" type="fixed">
+    <parent link="bench_breadboard" />
+    <child link="tip_station_3p5mm_frame" />
+    <origin xyz="-0.0125 -0.0127 -0.0875"
+      rpy="1.5708 0 0" />
+  </joint>
+
+  <link name="tip_station_4mm_frame" />
+
+  <joint name="breadboard_to_tip_station_4mm_frame" type="fixed">
+    <parent link="bench_breadboard" />
+    <child link="tip_station_4mm_frame" />
+    <origin xyz="-0.0375 -0.0127 -0.0125"
+      rpy="1.5708 0 0" />
+  </joint>
+
+  <link name="tip_station_5mm_frame" />
+
+  <joint name="breadboard_to_tip_station_5mm_frame" type="fixed">
+    <parent link="bench_breadboard" />
+    <child link="tip_station_5mm_frame" />
+    <origin xyz="-0.0125 -0.0127 0.0625"
+      rpy="1.5708 0 0" />
+  </joint>
+
+</robot>

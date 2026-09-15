@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="breadboard_visual" params="parent">
+
+    <link name="bench_breadboard_visual">
+      <visual>
+        <origin xyz="0 -0.0127 0" rpy="0 0 0" />
+        <geometry>
+          <mesh
+            filename="package://meca500_scene_description/meshes/onshape/MB3060_M___Aluminium_Breadboard_300_x_600_x_12_7mm_MB3030_M_1.stl" />
+        </geometry>
+        <material name="breadboard_grey">
+          <color rgba="0.55 0.55 0.55 1.0" />
+        </material>
+      </visual>
+    </link>
+
+    <joint name="${parent}_to_breadboard_visual" type="fixed">
+      <parent link="${parent}" />
+      <child link="bench_breadboard_visual" />
+      <origin xyz="0 0 0" rpy="0 0 0" />
+    </joint>
+
+  </xacro:macro>
+
+</robot>
