@@ -6,8 +6,11 @@
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/pose.hpp>
 #include <moveit/move_group_interface/move_group_interface.hpp>
+#include "meca500_tasks/trajectory_evaluator.hpp"
+#include <limits>
+#include <moveit/planning_scene_monitor/planning_scene_monitor.hpp>
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
     // 1. Initialise ROS and create our node.
     rclcpp::init(argc, argv);
@@ -22,14 +25,25 @@ int main(int argc, char* argv[])
     // Process incoming ROS messages while we wait for MoveIt.
     rclcpp::executors::SingleThreadedExecutor executor;
     executor.add_node(node);
-    std::thread spinner([&executor]() { executor.spin(); });
+    std::thread spinner([&executor]()
+                        { executor.spin(); });
 
     int exit_code = 1;
 
-    try {
+    try
+    {
         // 2. Connect to our existing MoveIt planning group.
         using moveit::planning_interface::MoveGroupInterface;
         auto move_group_interface = MoveGroupInterface(node, "meca_arm");
+
+        auto planning_scene_monitor =
+            std::make_shared<planning_scene_monitor::PlanningSceneMonitor>(
+                node,
+                "robot_description");
+
+        planning_scene_monitor->startSceneMonitor();
+        planning_scene_monitor->startWorldGeometryMonitor();
+        planning_scene_monitor->startStateMonitor();
 
         move_group_interface.setPoseReferenceFrame("world");
         move_group_interface.setEndEffectorLink("link_6");
@@ -46,9 +60,9 @@ int main(int argc, char* argv[])
         move_group_interface.setGoalOrientationTolerance(0.01);
 
         // 3. Read the target pose from ROS parameters.
-        double x  = node->get_parameter("x").as_double();
-        double y  = node->get_parameter("y").as_double();
-        double z  = node->get_parameter("z").as_double();
+        double x = node->get_parameter("x").as_double();
+        double y = node->get_parameter("y").as_double();
+        double z = node->get_parameter("z").as_double();
 
         double qx = node->get_parameter("qx").as_double();
         double qy = node->get_parameter("qy").as_double();
@@ -66,39 +80,126 @@ int main(int argc, char* argv[])
         target_pose.orientation.z = qz;
         target_pose.orientation.w = qw;
 
-        if (!move_group_interface.getCurrentState(10.0)) {
+        if (!move_group_interface.getCurrentState(10.0))
+        {
             RCLCPP_ERROR(logger, "No current robot state received.");
-        } else {
+        }
+        else
+        {
             move_group_interface.setStartStateToCurrentState();
             move_group_interface.setPoseTarget(target_pose);
 
-            // 4. Ask MoveIt for a plan.
-            auto const [success, plan] = [&move_group_interface] {
-                MoveGroupInterface::Plan result;
-                auto const success = static_cast<bool>(
-                    move_group_interface.plan(result));
+            // 4. Generate several candidate trajectories from the same start state.
+            constexpr int num_candidates = 10;
 
-                return std::make_pair(success, result);
-            }();
+            MoveGroupInterface::Plan best_plan;
 
-            // 5. Inspect the result. Execution is not enabled yet.
-            if (success) {
-                RCLCPP_INFO(logger, "Plan found. Executing...");
+            double best_path_length =
+                std::numeric_limits<double>::infinity();
 
-                const auto result = move_group_interface.execute(plan);
+            int best_candidate = -1;
+            int successful_plans = 0;
 
-                if (result == moveit::core::MoveItErrorCode::SUCCESS) {
-                    RCLCPP_INFO(logger, "Target reached successfully.");
-        
-                    exit_code = 0;
-                } else {
-                    RCLCPP_ERROR(logger, "Execution failed.");
+            for (int i = 0; i < num_candidates; ++i)
+            {
+                MoveGroupInterface::Plan candidate_plan;
+
+                const bool success = static_cast<bool>(
+                    move_group_interface.plan(candidate_plan));
+
+                if (!success)
+                {
+                    RCLCPP_WARN(
+                        logger,
+                        "Candidate %d: planning failed.",
+                        i + 1);
+
+                    continue;
                 }
-            } else {
-                RCLCPP_ERROR(logger, "Planning failed. Nothing executed.");
+
+                ++successful_plans;
+
+                const auto &trajectory =
+                    candidate_plan.trajectory.joint_trajectory;
+
+                const double path_length =
+                    meca500_tasks::calculatePathLength(trajectory);
+
+                const double smoothness =
+                    meca500_tasks::calculateSmoothness(trajectory);
+
+                const double duration =
+                    meca500_tasks::calculateDuration(trajectory);
+
+                planning_scene_monitor::LockedPlanningSceneRO scene(
+                    planning_scene_monitor);
+
+                const double minimum_clearance =
+                    meca500_tasks::calculateMinimumClearance(
+                        trajectory,
+                        scene);
+
+                RCLCPP_INFO(
+                    logger,
+                    "Candidate %d: length = %.4f rad | smoothness = %.6f | duration = %.3f s | clearance = %.4f m",
+                    i + 1,
+                    path_length,
+                    smoothness,
+                    duration,
+                    minimum_clearance);
+
+                // Keep this candidate if it is shorter than the current best.
+                if (path_length < best_path_length)
+                {
+                    best_path_length = path_length;
+                    best_plan = candidate_plan;
+                    best_candidate = i + 1;
+                }
+            }
+
+            // 5. Execute only the best candidate.
+            if (best_candidate != -1)
+            {
+                RCLCPP_INFO(
+                    logger,
+                    "%d/%d candidates succeeded.",
+                    successful_plans,
+                    num_candidates);
+
+                RCLCPP_INFO(
+                    logger,
+                    "Selected candidate %d with path length %.4f rad.",
+                    best_candidate,
+                    best_path_length);
+
+                const auto result =
+                    move_group_interface.execute(best_plan);
+
+                if (result == moveit::core::MoveItErrorCode::SUCCESS)
+                {
+                    RCLCPP_INFO(
+                        logger,
+                        "Best trajectory executed successfully.");
+
+                    exit_code = 0;
+                }
+                else
+                {
+                    RCLCPP_ERROR(
+                        logger,
+                        "Execution of best trajectory failed.");
+                }
+            }
+            else
+            {
+                RCLCPP_ERROR(
+                    logger,
+                    "All candidate trajectories failed to plan.");
             }
         }
-    } catch (const std::exception& error) {
+    }
+    catch (const std::exception &error)
+    {
         RCLCPP_ERROR(logger, "Task failed: %s", error.what());
     }
 
