@@ -1,4 +1,6 @@
 #include <memory>
+#include <string>
+#include <vector>
 
 #include <rclcpp/rclcpp.hpp>
 
@@ -8,90 +10,213 @@
 #include <geometric_shapes/shape_operations.h>
 #include <geometric_shapes/shapes.h>
 
-#include <shape_msgs/msg/mesh.hpp>
 #include <geometry_msgs/msg/pose.hpp>
+#include <shape_msgs/msg/mesh.hpp>
 
-int main(int argc, char** argv)
+moveit_msgs::msg::CollisionObject makeMeshObject(
+    const std::string &id,
+    const std::string &frame_id,
+    const std::string &mesh_resource,
+    double x,
+    double y,
+    double z)
+{
+    moveit_msgs::msg::CollisionObject object;
+
+    object.header.frame_id = frame_id;
+    object.id = id;
+
+    shapes::Mesh *mesh =
+        shapes::createMeshFromResource(mesh_resource);
+
+    if (!mesh)
+    {
+        throw std::runtime_error(
+            "Failed to load mesh: " + mesh_resource);
+    }
+
+    shapes::ShapeMsg shape_msg;
+    shapes::constructMsgFromShape(mesh, shape_msg);
+
+    shape_msgs::msg::Mesh mesh_msg =
+        boost::get<shape_msgs::msg::Mesh>(shape_msg);
+
+    delete mesh;
+
+    geometry_msgs::msg::Pose pose;
+
+    pose.position.x = x;
+    pose.position.y = y;
+    pose.position.z = z;
+
+    pose.orientation.x = 0.0;
+    pose.orientation.y = 0.0;
+    pose.orientation.z = 0.0;
+    pose.orientation.w = 1.0;
+
+    object.meshes.push_back(mesh_msg);
+    object.mesh_poses.push_back(pose);
+
+    object.operation =
+        moveit_msgs::msg::CollisionObject::ADD;
+
+    return object;
+}
+
+int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
 
-    auto node = std::make_shared<rclcpp::Node>(
-        "helico_environment_loader");
+    auto node =
+        std::make_shared<rclcpp::Node>(
+            "helico_environment_loader");
 
     auto logger = node->get_logger();
 
     moveit::planning_interface::PlanningSceneInterface
         planning_scene_interface;
 
-    moveit_msgs::msg::CollisionObject breadboard;
+    const std::string mesh_root =
+        "package://meca500_scene_description/meshes/onshape/";
 
-    // IMPORTANT:
-    // The breadboard is positioned relative to the same frame
-    // that also parents the Meca and station anchor frames.
-    breadboard.header.frame_id = "bench_breadboard";
-    breadboard.id = "breadboard";
+    std::vector<moveit_msgs::msg::CollisionObject> objects;
 
-    const std::string mesh_resource =
-        "package://meca500_scene_description/"
-        "meshes/onshape/"
-        "MB3060_M___Aluminium_Breadboard_300_x_600_x_12_7mm_MB3030_M_1.stl";
+    try
+    {
+        // =====================================================
+        // Breadboard
+        // =====================================================
 
-    shapes::Mesh* mesh =
-        shapes::createMeshFromResource(mesh_resource);
+        objects.push_back(
+            makeMeshObject(
+                "breadboard",
+                "bench_breadboard",
+                mesh_root +
+                    "MB3060_M___Aluminium_Breadboard_300_x_600_x_12_7mm_MB3030_M_1.stl",
+                0.0,
+                -0.0127,
+                0.0));
 
-    if (!mesh)
+        // =====================================================
+        // 3.5 mm station
+        // =====================================================
+
+        objects.push_back(
+            makeMeshObject(
+                "tip_station_3p5mm_base",
+                "tip_station_3p5mm_base_visual",
+                mesh_root + "Base.stl",
+                -0.0125,
+                0.0125,
+                0.025));
+
+        objects.push_back(
+            makeMeshObject(
+                "tip_station_3p5mm_coupling",
+                "tip_station_3p5mm_coupling_visual",
+                mesh_root + "Coupling_base.stl",
+                -0.006,
+                0.0,
+                0.0));
+
+        objects.push_back(
+            makeMeshObject(
+                "tip_station_3p5mm_holder",
+                "tip_station_3p5mm_holder_visual",
+                mesh_root + "_3D_printed.stl",
+                0.0,
+                -0.0123,
+                0.0));
+
+        // =====================================================
+        // 4 mm station
+        // =====================================================
+
+        objects.push_back(
+            makeMeshObject(
+                "tip_station_4mm_base",
+                "tip_station_4mm_base_visual",
+                mesh_root + "Base.stl",
+                0.0125,
+                0.0125,
+                0.025));
+
+        objects.push_back(
+            makeMeshObject(
+                "tip_station_4mm_coupling",
+                "tip_station_4mm_coupling_visual",
+                mesh_root + "Coupling_base.stl",
+                -0.006,
+                0.0,
+                0.0));
+
+        objects.push_back(
+            makeMeshObject(
+                "tip_station_4mm_holder",
+                "tip_station_4mm_holder_visual",
+                mesh_root + "_3D_printed.stl",
+                0.0,
+                -0.0123,
+                0.0));
+
+        // =====================================================
+        // 5 mm station
+        // =====================================================
+
+        objects.push_back(
+            makeMeshObject(
+                "tip_station_5mm_base",
+                "tip_station_5mm_base_visual",
+                mesh_root + "Base.stl",
+                -0.0125,
+                0.0125,
+                0.025));
+
+        objects.push_back(
+            makeMeshObject(
+                "tip_station_5mm_coupling",
+                "tip_station_5mm_coupling_visual",
+                mesh_root + "Coupling_base.stl",
+                -0.006,
+                0.0,
+                0.0));
+
+        objects.push_back(
+            makeMeshObject(
+                "tip_station_5mm_holder",
+                "tip_station_5mm_holder_visual",
+                mesh_root + "_3D_printed.stl",
+                0.0,
+                -0.0123,
+                0.0));
+    }
+    catch (const std::exception &e)
     {
         RCLCPP_ERROR(
             logger,
-            "Failed to load breadboard mesh.");
+            "%s",
+            e.what());
 
         rclcpp::shutdown();
         return 1;
     }
 
-    shape_msgs::msg::Mesh mesh_msg;
-
-    shapes::ShapeMsg shape_msg;
-    shapes::constructMsgFromShape(mesh, shape_msg);
-
-    mesh_msg = boost::get<shape_msgs::msg::Mesh>(shape_msg);
-
-    delete mesh;
-
-    // This is the SAME mesh-local transform that the breadboard
-    // previously had in the URDF.
-    geometry_msgs::msg::Pose breadboard_pose;
-
-    breadboard_pose.position.x = 0.0;
-    breadboard_pose.position.y = -0.0127;
-    breadboard_pose.position.z = 0.0;
-
-    breadboard_pose.orientation.x = 0.0;
-    breadboard_pose.orientation.y = 0.0;
-    breadboard_pose.orientation.z = 0.0;
-    breadboard_pose.orientation.w = 1.0;
-
-    breadboard.meshes.push_back(mesh_msg);
-    breadboard.mesh_poses.push_back(breadboard_pose);
-
-    breadboard.operation =
-        moveit_msgs::msg::CollisionObject::ADD;
-
     const bool success =
-        planning_scene_interface.applyCollisionObject(
-            breadboard);
+        planning_scene_interface.applyCollisionObjects(
+            objects);
 
     if (success)
     {
         RCLCPP_INFO(
             logger,
-            "Breadboard added to MoveIt world.");
+            "Loaded %zu Helico environment collision objects.",
+            objects.size());
     }
     else
     {
         RCLCPP_ERROR(
             logger,
-            "Failed to add breadboard to MoveIt world.");
+            "Failed to load Helico environment collision objects.");
     }
 
     rclcpp::shutdown();

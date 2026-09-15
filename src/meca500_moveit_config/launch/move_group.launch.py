@@ -7,6 +7,13 @@ from launch_ros.substitutions import FindPackageShare
 from launch_ros.parameter_descriptions import ParameterValue
 from ament_index_python.packages import get_package_share_directory
 from launch.actions import TimerAction
+from launch_ros.actions import Node
+
+environment_loader_node = Node(
+    package="meca500_scene_description",
+    executable="environment_loader",
+    output="screen",
+)
 
 def load_file(package_name, file_path):
     package_path = get_package_share_directory(package_name)
@@ -167,6 +174,12 @@ def generate_launch_description():
         robot_state_publisher_node,
         control_node,
         controller_spawner,
+
+        TimerAction(
+            period=2.0,
+            actions=[environment_loader_node],
+        ),
+
         TimerAction(
             period=8.0,
             actions=[rviz_node],
