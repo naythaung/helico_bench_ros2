@@ -39,6 +39,10 @@ def launch_setup(context):
     # 1. Which saved pose do we want?
     # ---------------------------------------------------------
     pose_name = LaunchConfiguration("pose").perform(context)
+    
+    trajectory_name = LaunchConfiguration(
+        "trajectory_name"
+    ).perform(context)
 
     poses_path = os.path.join(
         get_package_share_directory("meca500_tasks"),
@@ -120,9 +124,11 @@ def launch_setup(context):
             robot_description_kinematics,
             robot_description_planning,
 
-            # x, y, z, qx, qy, qz, qw
-            # come directly from poses.yaml
             pose,
+
+            {
+                "trajectory_name": trajectory_name,
+            },
         ],
     )
 
@@ -136,6 +142,12 @@ def generate_launch_description():
             "pose",
             default_value="meca_demo",
             description="Name of pose in poses.yaml",
+        ),
+
+        DeclareLaunchArgument(
+            "trajectory_name",
+            default_value="latest_selected",
+            description="Name used when saving selected trajectory",
         ),
 
         OpaqueFunction(function=launch_setup),

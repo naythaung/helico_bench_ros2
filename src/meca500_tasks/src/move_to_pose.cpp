@@ -11,6 +11,7 @@
 #include <moveit/planning_scene_monitor/planning_scene_monitor.hpp>
 
 #include "meca500_tasks/trajectory_evaluator.hpp"
+#include "meca500_tasks/trajectory_library.hpp"
 
 int main(int argc, char *argv[])
 {
@@ -22,6 +23,10 @@ int main(int argc, char *argv[])
             rclcpp::NodeOptions()
                 .automatically_declare_parameters_from_overrides(
                     true));
+
+    // trajectory_name is supplied by the launch file.
+    const std::string trajectory_name =
+        node->get_parameter("trajectory_name").as_string();
 
     auto const logger =
         node->get_logger();
@@ -232,7 +237,6 @@ int main(int argc, char *argv[])
                     metrics.minimum_clearance >
                     minimum_required_clearance;
 
-                // One clean output block per candidate.
                 RCLCPP_INFO(
                     logger,
                     "\n"
@@ -265,14 +269,13 @@ int main(int argc, char *argv[])
                 ++safe_plans;
 
                 // -------------------------------------------------
-                // HIERARCHICAL OPTIMISATION
+                // HIERARCHICAL / LEXICOGRAPHIC OPTIMISATION
                 //
                 // 1. Smoothness
                 // 2. Path length
                 // 3. Duration
                 //
-                // Clearance is a hard constraint,
-                // not a weighted cost.
+                // Clearance is a hard constraint.
                 // -------------------------------------------------
 
                 bool is_better = false;
@@ -291,7 +294,8 @@ int main(int argc, char *argv[])
                 else if (
                     std::abs(
                         metrics.smoothness -
-                        best_metrics.smoothness) <= smoothness_epsilon)
+                        best_metrics.smoothness) <=
+                    smoothness_epsilon)
                 {
                     if (
                         metrics.path_length <
@@ -303,7 +307,8 @@ int main(int argc, char *argv[])
                     else if (
                         std::abs(
                             metrics.path_length -
-                            best_metrics.path_length) <= path_length_epsilon)
+                            best_metrics.path_length) <=
+                        path_length_epsilon)
                     {
                         if (
                             metrics.duration <
@@ -374,6 +379,32 @@ int main(int argc, char *argv[])
                     RCLCPP_INFO(
                         logger,
                         "Selected trajectory executed successfully.");
+
+                    // -------------------------------------------------
+                    // SAVE SELECTED TRAJECTORY
+                    // -------------------------------------------------
+
+                    const bool saved =
+                        meca500_tasks::saveTrajectory(
+                            trajectory_name,
+                            best_plan
+                                .trajectory
+                                .joint_trajectory,
+                            best_metrics);
+
+                    if (saved)
+                    {
+                        RCLCPP_INFO(
+                            logger,
+                            "Saved trajectory '%s'.",
+                            trajectory_name.c_str());
+                    }
+                    else
+                    {
+                        RCLCPP_WARN(
+                            logger,
+                            "Failed to save selected trajectory.");
+                    }
 
                     exit_code = 0;
                 }
