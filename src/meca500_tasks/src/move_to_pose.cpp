@@ -1,117 +1,211 @@
+#include <cmath>
 #include <exception>
+#include <limits>
 #include <memory>
 #include <thread>
-#include <utility>
 
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/pose.hpp>
+
 #include <moveit/move_group_interface/move_group_interface.hpp>
-#include "meca500_tasks/trajectory_evaluator.hpp"
-#include <limits>
 #include <moveit/planning_scene_monitor/planning_scene_monitor.hpp>
+
+#include "meca500_tasks/trajectory_evaluator.hpp"
 
 int main(int argc, char *argv[])
 {
-    // 1. Initialise ROS and create our node.
     rclcpp::init(argc, argv);
 
-    auto const node = std::make_shared<rclcpp::Node>(
-        "meca_move_to_pose",
-        rclcpp::NodeOptions()
-            .automatically_declare_parameters_from_overrides(true));
+    auto const node =
+        std::make_shared<rclcpp::Node>(
+            "meca_move_to_pose",
+            rclcpp::NodeOptions()
+                .automatically_declare_parameters_from_overrides(
+                    true));
 
-    auto const logger = node->get_logger();
+    auto const logger =
+        node->get_logger();
 
-    // Process incoming ROS messages while we wait for MoveIt.
     rclcpp::executors::SingleThreadedExecutor executor;
     executor.add_node(node);
-    std::thread spinner([&executor]()
-                        { executor.spin(); });
+
+    std::thread spinner(
+        [&executor]()
+        {
+            executor.spin();
+        });
 
     int exit_code = 1;
 
     try
     {
-        // 2. Connect to our existing MoveIt planning group.
-        using moveit::planning_interface::MoveGroupInterface;
-        auto move_group_interface = MoveGroupInterface(node, "meca_arm");
+        using moveit::planning_interface::
+            MoveGroupInterface;
+
+        // ---------------------------------------------------------
+        // MOVEIT SETUP
+        // ---------------------------------------------------------
+
+        MoveGroupInterface move_group_interface(
+            node,
+            "meca_arm");
 
         auto planning_scene_monitor =
-            std::make_shared<planning_scene_monitor::PlanningSceneMonitor>(
+            std::make_shared<
+                planning_scene_monitor::
+                    PlanningSceneMonitor>(
                 node,
                 "robot_description");
 
-        planning_scene_monitor->startSceneMonitor();
-        planning_scene_monitor->startWorldGeometryMonitor();
-        planning_scene_monitor->startStateMonitor();
+        planning_scene_monitor
+            ->startSceneMonitor();
 
-        move_group_interface.setPoseReferenceFrame("world");
-        move_group_interface.setEndEffectorLink("link_6");
+        planning_scene_monitor
+            ->startWorldGeometryMonitor();
 
-        move_group_interface.setPlanningPipelineId("ompl");
-        move_group_interface.setPlannerId("RRTConnectkConfigDefault");
-        move_group_interface.setPlanningTime(5.0);
+        planning_scene_monitor
+            ->startStateMonitor();
 
-        move_group_interface.setMaxVelocityScalingFactor(0.2);
-        move_group_interface.setMaxAccelerationScalingFactor(0.2);
+        planning_scene_monitor
+            ->requestPlanningSceneState(
+                "/get_planning_scene");
 
-        // Our captured target was rounded, so allow small tolerances.
-        move_group_interface.setGoalPositionTolerance(0.001);
-        move_group_interface.setGoalOrientationTolerance(0.01);
+        move_group_interface
+            .setPoseReferenceFrame("world");
 
-        // 3. Read the target pose from ROS parameters.
-        double x = node->get_parameter("x").as_double();
-        double y = node->get_parameter("y").as_double();
-        double z = node->get_parameter("z").as_double();
+        move_group_interface
+            .setEndEffectorLink("link_6");
 
-        double qx = node->get_parameter("qx").as_double();
-        double qy = node->get_parameter("qy").as_double();
-        double qz = node->get_parameter("qz").as_double();
-        double qw = node->get_parameter("qw").as_double();
+        move_group_interface
+            .setPlanningPipelineId("ompl");
+
+        move_group_interface
+            .setPlannerId(
+                "RRTConnectkConfigDefault");
+
+        move_group_interface
+            .setPlanningTime(5.0);
+
+        move_group_interface
+            .setMaxVelocityScalingFactor(0.2);
+
+        move_group_interface
+            .setMaxAccelerationScalingFactor(0.2);
+
+        move_group_interface
+            .setGoalPositionTolerance(0.001);
+
+        move_group_interface
+            .setGoalOrientationTolerance(0.01);
+
+        // ---------------------------------------------------------
+        // TARGET POSE
+        // ---------------------------------------------------------
 
         geometry_msgs::msg::Pose target_pose;
 
-        target_pose.position.x = x;
-        target_pose.position.y = y;
-        target_pose.position.z = z;
+        target_pose.position.x =
+            node->get_parameter("x").as_double();
 
-        target_pose.orientation.x = qx;
-        target_pose.orientation.y = qy;
-        target_pose.orientation.z = qz;
-        target_pose.orientation.w = qw;
+        target_pose.position.y =
+            node->get_parameter("y").as_double();
 
-        if (!move_group_interface.getCurrentState(10.0))
+        target_pose.position.z =
+            node->get_parameter("z").as_double();
+
+        target_pose.orientation.x =
+            node->get_parameter("qx").as_double();
+
+        target_pose.orientation.y =
+            node->get_parameter("qy").as_double();
+
+        target_pose.orientation.z =
+            node->get_parameter("qz").as_double();
+
+        target_pose.orientation.w =
+            node->get_parameter("qw").as_double();
+
+        if (!move_group_interface
+                 .getCurrentState(10.0))
         {
-            RCLCPP_ERROR(logger, "No current robot state received.");
+            RCLCPP_ERROR(
+                logger,
+                "No current robot state received.");
         }
         else
         {
-            move_group_interface.setStartStateToCurrentState();
-            move_group_interface.setPoseTarget(target_pose);
+            move_group_interface
+                .setStartStateToCurrentState();
 
-            // 4. Generate several candidate trajectories from the same start state.
+            move_group_interface
+                .setPoseTarget(target_pose);
+
+            // -----------------------------------------------------
+            // TRAJECTORY SELECTION SETTINGS
+            // -----------------------------------------------------
+
             constexpr int num_candidates = 10;
+
+            // Currently only collision / penetration is rejected.
+            // Replace with a validated physical margin later.
+            constexpr double
+                minimum_required_clearance = 0.0;
+
+            // Treat sufficiently similar values as ties.
+            constexpr double
+                smoothness_epsilon = 1e-4;
+
+            constexpr double
+                path_length_epsilon = 1e-4;
+
+            constexpr double
+                duration_epsilon = 1e-3;
 
             MoveGroupInterface::Plan best_plan;
 
-            double best_path_length =
+            meca500_tasks::TrajectoryMetrics
+                best_metrics;
+
+            best_metrics.smoothness =
+                std::numeric_limits<double>::infinity();
+
+            best_metrics.path_length =
+                std::numeric_limits<double>::infinity();
+
+            best_metrics.duration =
                 std::numeric_limits<double>::infinity();
 
             int best_candidate = -1;
+
             int successful_plans = 0;
+            int safe_plans = 0;
 
-            for (int i = 0; i < num_candidates; ++i)
+            RCLCPP_INFO(
+                logger,
+                "Generating %d trajectory candidates...",
+                num_candidates);
+
+            // -----------------------------------------------------
+            // GENERATE AND EVALUATE CANDIDATES
+            // -----------------------------------------------------
+
+            for (int i = 0;
+                 i < num_candidates;
+                 ++i)
             {
-                MoveGroupInterface::Plan candidate_plan;
+                MoveGroupInterface::Plan
+                    candidate_plan;
 
-                const bool success = static_cast<bool>(
-                    move_group_interface.plan(candidate_plan));
+                const bool planning_success =
+                    static_cast<bool>(
+                        move_group_interface.plan(
+                            candidate_plan));
 
-                if (!success)
+                if (!planning_success)
                 {
                     RCLCPP_WARN(
                         logger,
-                        "Candidate %d: planning failed.",
+                        "Candidate %d | PLANNING FAILED",
                         i + 1);
 
                     continue;
@@ -120,66 +214,166 @@ int main(int argc, char *argv[])
                 ++successful_plans;
 
                 const auto &trajectory =
-                    candidate_plan.trajectory.joint_trajectory;
+                    candidate_plan
+                        .trajectory
+                        .joint_trajectory;
 
-                const double path_length =
-                    meca500_tasks::calculatePathLength(trajectory);
+                planning_scene_monitor::
+                    LockedPlanningSceneRO scene(
+                        planning_scene_monitor);
 
-                const double smoothness =
-                    meca500_tasks::calculateSmoothness(trajectory);
+                const auto metrics =
+                    meca500_tasks::
+                        evaluateTrajectory(
+                            trajectory,
+                            scene);
 
-                const double duration =
-                    meca500_tasks::calculateDuration(trajectory);
+                const bool is_safe =
+                    metrics.minimum_clearance >
+                    minimum_required_clearance;
 
-                planning_scene_monitor::LockedPlanningSceneRO scene(
-                    planning_scene_monitor);
-
-                const double minimum_clearance =
-                    meca500_tasks::calculateMinimumClearance(
-                        trajectory,
-                        scene);
-
+                // One clean output block per candidate.
                 RCLCPP_INFO(
                     logger,
-                    "Candidate %d: length = %.4f rad | smoothness = %.6f | duration = %.3f s | clearance = %.4f m",
+                    "\n"
+                    "Candidate %d\n"
+                    "  Status       : %s\n"
+                    "  Clearance    : %.1f mm\n"
+                    "  Closest pair : %s <-> %s\n"
+                    "  Smoothness   : %.6f\n"
+                    "  Path length  : %.4f rad\n"
+                    "  Duration     : %.3f s",
                     i + 1,
-                    path_length,
-                    smoothness,
-                    duration,
-                    minimum_clearance);
+                    is_safe ? "SAFE" : "REJECTED",
+                    metrics.minimum_clearance *
+                        1000.0,
+                    metrics.closest_object_a.c_str(),
+                    metrics.closest_object_b.c_str(),
+                    metrics.smoothness,
+                    metrics.path_length,
+                    metrics.duration);
 
-                // Keep this candidate if it is shorter than the current best.
-                if (path_length < best_path_length)
+                // -------------------------------------------------
+                // HARD SAFETY GATE
+                // -------------------------------------------------
+
+                if (!is_safe)
                 {
-                    best_path_length = path_length;
-                    best_plan = candidate_plan;
+                    continue;
+                }
+
+                ++safe_plans;
+
+                // -------------------------------------------------
+                // HIERARCHICAL OPTIMISATION
+                //
+                // 1. Smoothness
+                // 2. Path length
+                // 3. Duration
+                //
+                // Clearance is a hard constraint,
+                // not a weighted cost.
+                // -------------------------------------------------
+
+                bool is_better = false;
+
+                if (best_candidate == -1)
+                {
+                    is_better = true;
+                }
+                else if (
+                    metrics.smoothness <
+                    best_metrics.smoothness -
+                        smoothness_epsilon)
+                {
+                    is_better = true;
+                }
+                else if (
+                    std::abs(
+                        metrics.smoothness -
+                        best_metrics.smoothness) <= smoothness_epsilon)
+                {
+                    if (
+                        metrics.path_length <
+                        best_metrics.path_length -
+                            path_length_epsilon)
+                    {
+                        is_better = true;
+                    }
+                    else if (
+                        std::abs(
+                            metrics.path_length -
+                            best_metrics.path_length) <= path_length_epsilon)
+                    {
+                        if (
+                            metrics.duration <
+                            best_metrics.duration -
+                                duration_epsilon)
+                        {
+                            is_better = true;
+                        }
+                    }
+                }
+
+                if (is_better)
+                {
                     best_candidate = i + 1;
+                    best_plan = candidate_plan;
+                    best_metrics = metrics;
                 }
             }
 
-            // 5. Execute only the best candidate.
+            // -----------------------------------------------------
+            // FINAL RESULT
+            // -----------------------------------------------------
+
             if (best_candidate != -1)
             {
                 RCLCPP_INFO(
                     logger,
-                    "%d/%d candidates succeeded.",
+                    "\n"
+                    "==============================\n"
+                    "TRAJECTORY SELECTION SUMMARY\n"
+                    "==============================\n"
+                    "Planned successfully : %d/%d\n"
+                    "Passed safety gate    : %d/%d\n"
+                    "\n"
+                    "Selected candidate     : %d\n"
+                    "Clearance              : %.1f mm\n"
+                    "Closest pair           : %s <-> %s\n"
+                    "Smoothness             : %.6f\n"
+                    "Path length            : %.4f rad\n"
+                    "Duration               : %.3f s\n"
+                    "==============================",
                     successful_plans,
-                    num_candidates);
-
-                RCLCPP_INFO(
-                    logger,
-                    "Selected candidate %d with path length %.4f rad.",
+                    num_candidates,
+                    safe_plans,
+                    successful_plans,
                     best_candidate,
-                    best_path_length);
+                    best_metrics.minimum_clearance *
+                        1000.0,
+                    best_metrics.closest_object_a.c_str(),
+                    best_metrics.closest_object_b.c_str(),
+                    best_metrics.smoothness,
+                    best_metrics.path_length,
+                    best_metrics.duration);
+
+                // -------------------------------------------------
+                // EXECUTION
+                // -------------------------------------------------
 
                 const auto result =
-                    move_group_interface.execute(best_plan);
+                    move_group_interface.execute(
+                        best_plan);
 
-                if (result == moveit::core::MoveItErrorCode::SUCCESS)
+                if (
+                    result ==
+                    moveit::core::
+                        MoveItErrorCode::SUCCESS)
                 {
                     RCLCPP_INFO(
                         logger,
-                        "Best trajectory executed successfully.");
+                        "Selected trajectory executed successfully.");
 
                     exit_code = 0;
                 }
@@ -187,25 +381,36 @@ int main(int argc, char *argv[])
                 {
                     RCLCPP_ERROR(
                         logger,
-                        "Execution of best trajectory failed.");
+                        "Execution of selected trajectory failed.");
                 }
+            }
+            else if (successful_plans > 0)
+            {
+                RCLCPP_ERROR(
+                    logger,
+                    "Planning succeeded, but no candidate "
+                    "passed the clearance safety gate.");
             }
             else
             {
                 RCLCPP_ERROR(
                     logger,
-                    "All candidate trajectories failed to plan.");
+                    "All trajectory candidates failed "
+                    "to plan.");
             }
         }
     }
     catch (const std::exception &error)
     {
-        RCLCPP_ERROR(logger, "Task failed: %s", error.what());
+        RCLCPP_ERROR(
+            logger,
+            "Task failed: %s",
+            error.what());
     }
 
-    // 6. Stop message processing and shut down.
     executor.cancel();
     spinner.join();
+
     rclcpp::shutdown();
 
     return exit_code;

@@ -1,126 +1,194 @@
 #include "meca500_tasks/trajectory_evaluator.hpp"
 
 #include <cmath>
-
 #include <limits>
+
 #include <moveit/robot_state/robot_state.hpp>
+#include <moveit/collision_detection/collision_common.hpp>
+#include <moveit/collision_detection/collision_env.hpp>
 
 namespace meca500_tasks
 {
 
-    double calculatePathLength(
-        const trajectory_msgs::msg::JointTrajectory &trajectory)
+double calculatePathLength(
+    const trajectory_msgs::msg::JointTrajectory &trajectory)
+{
+    const auto &points = trajectory.points;
+
+    if (points.size() < 2)
+        return 0.0;
+
+    double total_length = 0.0;
+
+    for (std::size_t i = 1; i < points.size(); ++i)
     {
-        const auto &points = trajectory.points;
+        double segment_squared = 0.0;
 
-        if (points.size() < 2)
-            return 0.0;
-
-        double total_length = 0.0;
-
-        for (std::size_t i = 1; i < points.size(); ++i)
+        for (std::size_t j = 0;
+             j < points[i].positions.size();
+             ++j)
         {
-            double segment_squared = 0.0;
+            const double dq =
+                points[i].positions[j] -
+                points[i - 1].positions[j];
 
-            for (std::size_t j = 0;
-                 j < points[i].positions.size();
-                 ++j)
-            {
-                const double dq =
-                    points[i].positions[j] -
-                    points[i - 1].positions[j];
-
-                segment_squared += dq * dq;
-            }
-
-            total_length += std::sqrt(segment_squared);
+            segment_squared += dq * dq;
         }
 
-        return total_length;
+        total_length += std::sqrt(segment_squared);
     }
 
-    double calculateSmoothness(
-        const trajectory_msgs::msg::JointTrajectory &trajectory)
+    return total_length;
+}
+
+double calculateSmoothness(
+    const trajectory_msgs::msg::JointTrajectory &trajectory)
+{
+    const auto &points = trajectory.points;
+
+    if (points.size() < 3)
+        return 0.0;
+
+    double smoothness = 0.0;
+
+    for (std::size_t i = 1;
+         i < points.size() - 1;
+         ++i)
     {
-        const auto &points = trajectory.points;
-
-        if (points.size() < 3)
-            return 0.0;
-
-        double smoothness = 0.0;
-
-        for (std::size_t i = 1; i < points.size() - 1; ++i)
+        for (std::size_t j = 0;
+             j < points[i].positions.size();
+             ++j)
         {
-            for (std::size_t j = 0;
-                 j < points[i].positions.size();
-                 ++j)
-            {
-                const double second_difference =
-                    points[i + 1].positions[j] - 2.0 * points[i].positions[j] + points[i - 1].positions[j];
+            const double second_difference =
+                points[i + 1].positions[j]
+                - 2.0 * points[i].positions[j]
+                + points[i - 1].positions[j];
 
-                smoothness +=
-                    second_difference * second_difference;
-            }
+            smoothness +=
+                second_difference *
+                second_difference;
+        }
+    }
+
+    return smoothness;
+}
+
+double calculateDuration(
+    const trajectory_msgs::msg::JointTrajectory &trajectory)
+{
+    if (trajectory.points.empty())
+        return 0.0;
+
+    const auto &time =
+        trajectory.points.back().time_from_start;
+
+    return static_cast<double>(time.sec)
+        + static_cast<double>(time.nanosec) * 1e-9;
+}
+
+TrajectoryMetrics evaluateTrajectory(
+    const trajectory_msgs::msg::JointTrajectory &trajectory,
+    const planning_scene::PlanningSceneConstPtr &planning_scene)
+{
+    TrajectoryMetrics metrics;
+
+    metrics.path_length =
+        calculatePathLength(trajectory);
+
+    metrics.smoothness =
+        calculateSmoothness(trajectory);
+
+    metrics.duration =
+        calculateDuration(trajectory);
+
+    if (!planning_scene ||
+        trajectory.points.empty())
+    {
+        return metrics;
+    }
+
+    metrics.minimum_clearance =
+        std::numeric_limits<double>::infinity();
+
+    moveit::core::RobotState state =
+        planning_scene->getCurrentState();
+
+    const auto &acm =
+        planning_scene->getAllowedCollisionMatrix();
+
+    // Clearance sampling is used for ranking / diagnostics.
+    // MoveIt remains responsible for full collision checking
+    // during planning.
+    constexpr std::size_t sample_stride = 5;
+
+    auto evaluate_point =
+        [&](const trajectory_msgs::msg::JointTrajectoryPoint &point)
+    {
+        for (std::size_t j = 0;
+             j < trajectory.joint_names.size();
+             ++j)
+        {
+            state.setVariablePosition(
+                trajectory.joint_names[j],
+                point.positions[j]);
         }
 
-        return smoothness;
-    }
+        state.update();
 
-    double calculateDuration(
-        const trajectory_msgs::msg::JointTrajectory &trajectory)
-    {
-        if (trajectory.points.empty())
-            return 0.0;
+        collision_detection::DistanceRequest request;
+        collision_detection::DistanceResult result;
 
-        const auto &time =
-            trajectory.points.back().time_from_start;
+        request.type =
+            collision_detection::DistanceRequestType::SINGLE;
 
-        return static_cast<double>(time.sec) + static_cast<double>(time.nanosec) * 1e-9;
-    }
+        request.enable_nearest_points = false;
+        request.enable_signed_distance = true;
+        request.acm = &acm;
 
-    double calculateMinimumClearance(
-        const trajectory_msgs::msg::JointTrajectory &trajectory,
-        const planning_scene::PlanningSceneConstPtr &planning_scene)
-    {
-        if (!planning_scene || trajectory.points.empty())
-            return 0.0;
+        planning_scene
+            ->getCollisionEnv()
+            ->distanceRobot(
+                request,
+                result,
+                state);
 
-        double minimum_clearance =
-            std::numeric_limits<double>::infinity();
+        const double clearance =
+            result.minimum_distance.distance;
 
-        moveit::core::RobotState state(
-            planning_scene->getRobotModel());
-
-        state = planning_scene->getCurrentState();
-
-        const auto &acm =
-            planning_scene->getAllowedCollisionMatrix();
-
-        for (const auto &point : trajectory.points)
+        if (clearance <
+            metrics.minimum_clearance)
         {
-            for (std::size_t j = 0;
-                 j < trajectory.joint_names.size();
-                 ++j)
-            {
-                state.setVariablePosition(
-                    trajectory.joint_names[j],
-                    point.positions[j]);
-            }
+            metrics.minimum_clearance =
+                clearance;
 
-            state.update();
+            metrics.closest_object_a =
+                result.minimum_distance.link_names[0];
 
-            const double clearance =
-                planning_scene->distanceToCollision(
-                    state,
-                    acm);
-
-            if (clearance < minimum_clearance)
-            {
-                minimum_clearance = clearance;
-            }
+            metrics.closest_object_b =
+                result.minimum_distance.link_names[1];
         }
+    };
 
-        return minimum_clearance;
+    // Sample every fifth waypoint.
+    for (std::size_t i = 0;
+         i < trajectory.points.size();
+         i += sample_stride)
+    {
+        evaluate_point(
+            trajectory.points[i]);
     }
+
+    // Always check the final trajectory point.
+    const std::size_t final_index =
+        trajectory.points.size() - 1;
+
+    if (final_index % sample_stride != 0)
+    {
+        evaluate_point(
+            trajectory.points.back());
+    }
+
+    return metrics;
+}
 
 } // namespace meca500_tasks
