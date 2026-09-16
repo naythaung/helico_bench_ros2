@@ -1,151 +1,220 @@
 #pragma once
 
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <string>
 
+#include <yaml-cpp/yaml.h>
+
 #include <trajectory_msgs/msg/joint_trajectory.hpp>
+#include <trajectory_msgs/msg/joint_trajectory_point.hpp>
 
 #include "meca500_tasks/trajectory_evaluator.hpp"
 
 namespace meca500_tasks
 {
 
-     inline bool saveTrajectory(
-         const std::string &name,
-         const trajectory_msgs::msg::JointTrajectory &trajectory,
-         const TrajectoryMetrics &metrics)
-     {
-          // Portable location for runtime-generated files:
-          //
-          // ~/.ros/helico_bench/trajectories/
-          const char *home = std::getenv("HOME");
+inline bool saveTrajectory(
+    const std::string &name,
+    const trajectory_msgs::msg::JointTrajectory &trajectory,
+    const TrajectoryMetrics &metrics)
+{
+    const std::filesystem::path directory =
+        std::filesystem::current_path()
+        / "src"
+        / "meca500_tasks"
+        / "trajectories";
 
-          if (home == nullptr)
-               return false;
+    std::filesystem::create_directories(directory);
 
-          const std::filesystem::path directory =
-              std::filesystem::current_path() 
-              / "src" 
-              / "meca500_tasks" 
-              / "trajectories";
+    const std::filesystem::path filepath =
+        directory / (name + ".yaml");
 
-          std::filesystem::create_directories(directory);
+    std::ofstream file(filepath);
 
-          const std::filesystem::path filepath =
-              directory / (name + ".yaml");
+    if (!file.is_open())
+        return false;
 
-          std::ofstream file(filepath);
+    file << std::setprecision(15);
 
-          if (!file.is_open())
-               return false;
+    // ---------------------------------------------------------
+    // METADATA
+    // ---------------------------------------------------------
 
-          file << std::setprecision(15);
+    file << "name: " << name << "\n";
 
-          // ---------------------------------------------------------
-          // METADATA
-          // ---------------------------------------------------------
+    file << "metrics:\n";
+    file << "  minimum_clearance: "
+         << metrics.minimum_clearance << "\n";
 
-          file << "name: " << name << "\n";
+    file << "  closest_object_a: "
+         << metrics.closest_object_a << "\n";
 
-          file << "metrics:\n";
-          file << "  minimum_clearance: "
-               << metrics.minimum_clearance << "\n";
+    file << "  closest_object_b: "
+         << metrics.closest_object_b << "\n";
 
-          file << "  closest_object_a: "
-               << metrics.closest_object_a << "\n";
+    file << "  smoothness: "
+         << metrics.smoothness << "\n";
 
-          file << "  closest_object_b: "
-               << metrics.closest_object_b << "\n";
+    file << "  path_length: "
+         << metrics.path_length << "\n";
 
-          file << "  smoothness: "
-               << metrics.smoothness << "\n";
+    file << "  duration: "
+         << metrics.duration << "\n";
 
-          file << "  path_length: "
-               << metrics.path_length << "\n";
+    // ---------------------------------------------------------
+    // JOINT NAMES
+    // ---------------------------------------------------------
 
-          file << "  duration: "
-               << metrics.duration << "\n";
+    file << "joint_names:\n";
 
-          // ---------------------------------------------------------
-          // JOINT NAMES
-          // ---------------------------------------------------------
+    for (const auto &joint_name : trajectory.joint_names)
+    {
+        file << "  - " << joint_name << "\n";
+    }
 
-          file << "joint_names:\n";
+    // ---------------------------------------------------------
+    // TRAJECTORY POINTS
+    // ---------------------------------------------------------
 
-          for (const auto &joint_name :
-               trajectory.joint_names)
-          {
-               file << "  - " << joint_name << "\n";
-          }
+    file << "points:\n";
 
-          // ---------------------------------------------------------
-          // TRAJECTORY POINTS
-          // ---------------------------------------------------------
+    for (const auto &point : trajectory.points)
+    {
+        file << "  - positions: [";
 
-          file << "points:\n";
+        for (std::size_t i = 0;
+             i < point.positions.size();
+             ++i)
+        {
+            file << point.positions[i];
 
-          for (const auto &point :
-               trajectory.points)
-          {
-               file << "  - positions: [";
+            if (i + 1 < point.positions.size())
+                file << ", ";
+        }
 
-               for (std::size_t i = 0;
-                    i < point.positions.size();
-                    ++i)
-               {
-                    file << point.positions[i];
+        file << "]\n";
 
-                    if (i + 1 < point.positions.size())
-                         file << ", ";
-               }
+        file << "    velocities: [";
 
-               file << "]\n";
+        for (std::size_t i = 0;
+             i < point.velocities.size();
+             ++i)
+        {
+            file << point.velocities[i];
 
-               file << "    velocities: [";
+            if (i + 1 < point.velocities.size())
+                file << ", ";
+        }
 
-               for (std::size_t i = 0;
-                    i < point.velocities.size();
-                    ++i)
-               {
-                    file << point.velocities[i];
+        file << "]\n";
 
-                    if (i + 1 < point.velocities.size())
-                         file << ", ";
-               }
+        file << "    accelerations: [";
 
-               file << "]\n";
+        for (std::size_t i = 0;
+             i < point.accelerations.size();
+             ++i)
+        {
+            file << point.accelerations[i];
 
-               file << "    accelerations: [";
+            if (i + 1 < point.accelerations.size())
+                file << ", ";
+        }
 
-               for (std::size_t i = 0;
-                    i < point.accelerations.size();
-                    ++i)
-               {
-                    file << point.accelerations[i];
+        file << "]\n";
 
-                    if (i + 1 < point.accelerations.size())
-                         file << ", ";
-               }
+        file << "    time_from_start:\n";
+        file << "      sec: "
+             << point.time_from_start.sec << "\n";
+        file << "      nanosec: "
+             << point.time_from_start.nanosec << "\n";
+    }
 
-               file << "]\n";
+    file.close();
 
-               file << "    time_from_start:\n";
+    return true;
+}
 
-               file << "      sec: "
-                    << point.time_from_start.sec
-                    << "\n";
 
-               file << "      nanosec: "
-                    << point.time_from_start.nanosec
-                    << "\n";
-          }
+inline bool loadTrajectory(
+    const std::string &name,
+    trajectory_msgs::msg::JointTrajectory &trajectory)
+{
+    const std::filesystem::path filepath =
+        std::filesystem::current_path()
+        / "src"
+        / "meca500_tasks"
+        / "trajectories"
+        / (name + ".yaml");
 
-          file.close();
+    if (!std::filesystem::exists(filepath))
+        return false;
 
-          return true;
-     }
+    try
+    {
+        const YAML::Node root =
+            YAML::LoadFile(filepath.string());
+
+        trajectory.joint_names.clear();
+        trajectory.points.clear();
+
+        // ---------------------------------------------------------
+        // JOINT NAMES
+        // ---------------------------------------------------------
+
+        for (const auto &joint : root["joint_names"])
+        {
+            trajectory.joint_names.push_back(
+                joint.as<std::string>());
+        }
+
+        // ---------------------------------------------------------
+        // TRAJECTORY POINTS
+        // ---------------------------------------------------------
+
+        for (const auto &saved_point : root["points"])
+        {
+            trajectory_msgs::msg::JointTrajectoryPoint point;
+
+            for (const auto &value :
+                 saved_point["positions"])
+            {
+                point.positions.push_back(
+                    value.as<double>());
+            }
+
+            for (const auto &value :
+                 saved_point["velocities"])
+            {
+                point.velocities.push_back(
+                    value.as<double>());
+            }
+
+            for (const auto &value :
+                 saved_point["accelerations"])
+            {
+                point.accelerations.push_back(
+                    value.as<double>());
+            }
+
+            point.time_from_start.sec =
+                saved_point["time_from_start"]["sec"]
+                    .as<int32_t>();
+
+            point.time_from_start.nanosec =
+                saved_point["time_from_start"]["nanosec"]
+                    .as<uint32_t>();
+
+            trajectory.points.push_back(point);
+        }
+
+        return !trajectory.points.empty();
+    }
+    catch (const std::exception &)
+    {
+        return false;
+    }
+}
 
 } // namespace meca500_tasks
