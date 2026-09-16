@@ -13,6 +13,13 @@
 #include <geometry_msgs/msg/pose.hpp>
 #include <shape_msgs/msg/mesh.hpp>
 
+#include <algorithm>
+#include <chrono>
+
+#include <moveit_msgs/msg/planning_scene.hpp>
+#include <moveit_msgs/msg/planning_scene_components.hpp>
+#include <moveit_msgs/srv/get_planning_scene.hpp>
+
 moveit_msgs::msg::CollisionObject makeMeshObject(
     const std::string &id,
     const std::string &frame_id,
@@ -61,6 +68,53 @@ moveit_msgs::msg::CollisionObject makeMeshObject(
         moveit_msgs::msg::CollisionObject::ADD;
 
     return object;
+}
+
+void setAllowedCollision(
+    moveit_msgs::msg::AllowedCollisionMatrix &acm,
+    const std::string &name_a,
+    const std::string &name_b,
+    bool allowed)
+{
+    auto ensure_entry =
+        [&acm](const std::string &name)
+    {
+        auto it = std::find(
+            acm.entry_names.begin(),
+            acm.entry_names.end(),
+            name);
+
+        if (it != acm.entry_names.end())
+        {
+            return static_cast<std::size_t>(
+                std::distance(acm.entry_names.begin(), it));
+        }
+
+        const std::size_t old_size =
+            acm.entry_names.size();
+
+        acm.entry_names.push_back(name);
+
+        // Add one new column to all existing rows.
+        for (auto &row : acm.entry_values)
+        {
+            row.enabled.push_back(false);
+        }
+
+        // Add the new row.
+        moveit_msgs::msg::AllowedCollisionEntry new_row;
+        new_row.enabled.resize(old_size + 1, false);
+
+        acm.entry_values.push_back(new_row);
+
+        return old_size;
+    };
+
+    const std::size_t index_a = ensure_entry(name_a);
+    const std::size_t index_b = ensure_entry(name_b);
+
+    acm.entry_values[index_a].enabled[index_b] = allowed;
+    acm.entry_values[index_b].enabled[index_a] = allowed;
 }
 
 int main(int argc, char **argv)
@@ -205,21 +259,99 @@ int main(int argc, char **argv)
         planning_scene_interface.applyCollisionObjects(
             objects);
 
-    if (success)
-    {
-        RCLCPP_INFO(
-            logger,
-            "Loaded %zu Helico environment collision objects.",
-            objects.size());
-    }
-    else
+    if (!success)
     {
         RCLCPP_ERROR(
             logger,
             "Failed to load Helico environment collision objects.");
+
+        rclcpp::shutdown();
+        return 1;
     }
+
+    // =====================================================
+    // Preserve existing ACM and add world exception
+    // =====================================================
+
+    auto get_scene_client =
+        node->create_client<moveit_msgs::srv::GetPlanningScene>(
+            "/get_planning_scene");
+
+    if (!get_scene_client->wait_for_service(
+            std::chrono::seconds(5)))
+    {
+        RCLCPP_ERROR(
+            logger,
+            "/get_planning_scene service not available.");
+
+        rclcpp::shutdown();
+        return 1;
+    }
+
+    auto request =
+        std::make_shared<
+            moveit_msgs::srv::GetPlanningScene::Request>();
+
+    request->components.components =
+        moveit_msgs::msg::PlanningSceneComponents::
+            ALLOWED_COLLISION_MATRIX;
+
+    auto future =
+        get_scene_client->async_send_request(request);
+
+    if (rclcpp::spin_until_future_complete(
+            node,
+            future,
+            std::chrono::seconds(5)) != rclcpp::FutureReturnCode::SUCCESS)
+    {
+        RCLCPP_ERROR(
+            logger,
+            "Failed to retrieve current PlanningScene ACM.");
+
+        rclcpp::shutdown();
+        return 1;
+    }
+
+    auto response = future.get();
+
+    auto acm =
+        response->scene.allowed_collision_matrix;
+
+    // Preserve everything already in MoveIt and add ONLY this exception.
+    setAllowedCollision(
+        acm,
+        "base_link",
+        "breadboard",
+        true);
+
+    moveit_msgs::msg::PlanningScene planning_scene_msg;
+    planning_scene_msg.is_diff = true;
+    planning_scene_msg.allowed_collision_matrix = acm;
+
+    const bool acm_success =
+        planning_scene_interface.applyPlanningScene(
+            planning_scene_msg);
+
+    if (!acm_success)
+    {
+        RCLCPP_ERROR(
+            logger,
+            "Failed to update Allowed Collision Matrix.");
+
+        rclcpp::shutdown();
+        return 1;
+    }
+
+    RCLCPP_INFO(
+        logger,
+        "Loaded %zu Helico environment collision objects.",
+        objects.size());
+
+    RCLCPP_INFO(
+        logger,
+        "Allowed intentional collision: base_link <-> breadboard.");
 
     rclcpp::shutdown();
 
-    return success ? 0 : 1;
+    return 0;
 }

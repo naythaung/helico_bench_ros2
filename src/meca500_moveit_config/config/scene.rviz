@@ -4,11 +4,12 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
+        - /Global Options1
         - /PlanningScene1
         - /MotionPlanning1
         - /MotionPlanning1/Scene Geometry1
       Splitter Ratio: 0.5
-    Tree Height: 366
+    Tree Height: 246
   - Class: rviz_common/Selection
     Name: Selection
   - Class: rviz_common/Tool Properties
@@ -69,145 +70,6 @@ Visualization Manager:
           Expand Link Details: false
           Expand Tree: false
           Link Tree Style: Links in Alphabetic Order
-          april_tag_mount:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          base_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          bench_breadboard:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-          bench_breadboard_visual:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          bench_frame:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-          force_poker:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          force_sensor:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          laser_sensor:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          laser_sensor_mount:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link_1:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link_2:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link_3:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link_4:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link_5:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link_6:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          tip_station_3p5mm_base_visual:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          tip_station_3p5mm_coupling_visual:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          tip_station_3p5mm_frame:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-          tip_station_3p5mm_holder_visual:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          tip_station_4mm_base_visual:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          tip_station_4mm_coupling_visual:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          tip_station_4mm_frame:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-          tip_station_4mm_holder_visual:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          tip_station_5mm_base_visual:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          tip_station_5mm_coupling_visual:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          tip_station_5mm_frame:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-          tip_station_5mm_holder_visual:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          tools_mount:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          world:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
         Robot Alpha: 1
         Show Robot Collision: false
         Show Robot Visual: true
@@ -741,7 +603,7 @@ Visualization Manager:
   Global Options:
     Background Color: 48; 48; 48
     Fixed Frame: world
-    Frame Rate: 30
+    Frame Rate: 60
   Name: root
   Tools:
     - Class: rviz_default_plugins/Interact
@@ -783,37 +645,37 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 0.7225435972213745
+      Distance: 0.7140008807182312
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.015204827301204205
-        Y: -0.06310715526342392
-        Z: 0.17469123005867004
+        X: -0.0027826158329844475
+        Y: -0.050742726773023605
+        Z: 0.18734849989414215
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.3953971266746521
+      Pitch: 0.32039737701416016
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 6.0853962898254395
+      Yaw: 5.670381546020508
     Saved: ~
 Window Geometry:
   Displays:
     collapsed: false
-  Height: 1126
+  Height: 1006
   Hide Left Dock: false
   Hide Right Dock: false
   MotionPlanning:
     collapsed: false
   MotionPlanning - Trajectory Slider:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd000000040000000000000233000003bcfc020000000bfb0000001200530065006c0065006300740069006f006e00000001e10000009b0000006800fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000004400000201000000e200fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb000000280020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000000000000000fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000001900000019fb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e0067010000024b000001b5000001aa00ffffff000000010000010f000003bcfc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a005600690065007700730100000044000003bc000000b800fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000007800000003ffc0100000002fb0000000800540069006d0065010000000000000780000002b300fffffffb0000000800540069006d0065010000000000000450000000000000000000000432000003bc00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd00000004000000000000023300000344fc020000000bfb0000001200530065006c0065006300740069006f006e00000001e10000009b0000006800fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000004400000189000000e200fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb000000280020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000000000000000fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000001900000019fb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e006701000001d3000001b5000001aa00ffffff000000010000010f00000344fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073010000004400000344000000b800fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000007800000003ffc0100000002fb0000000800540069006d0065010000000000000780000002b300fffffffb0000000800540069006d00650100000000000004500000000000000000000004320000034400000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Time:
