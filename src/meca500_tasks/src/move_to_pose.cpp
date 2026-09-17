@@ -1,8 +1,10 @@
+#include <algorithm>
 #include <cmath>
 #include <exception>
 #include <limits>
 #include <memory>
 #include <thread>
+#include <vector>
 
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/pose.hpp>
@@ -12,6 +14,20 @@
 
 #include "meca500_tasks/trajectory_evaluator.hpp"
 #include "meca500_tasks/trajectory_library.hpp"
+
+
+struct Candidate
+{
+    int number = -1;
+
+    moveit::planning_interface::
+        MoveGroupInterface::Plan plan;
+
+    meca500_tasks::TrajectoryMetrics metrics;
+
+    double score = 0.0;
+};
+
 
 int main(int argc, char *argv[])
 {
@@ -24,7 +40,7 @@ int main(int argc, char *argv[])
                 .automatically_declare_parameters_from_overrides(
                     true));
 
-    // trajectory_name is supplied by the launch file.
+    // Name used when saving the selected trajectory.
     const std::string trajectory_name =
         node->get_parameter("trajectory_name").as_string();
 
@@ -130,8 +146,7 @@ int main(int argc, char *argv[])
         target_pose.orientation.w =
             node->get_parameter("qw").as_double();
 
-        if (!move_group_interface
-                 .getCurrentState(10.0))
+        if (!move_group_interface.getCurrentState(10.0))
         {
             RCLCPP_ERROR(
                 logger,
@@ -146,44 +161,44 @@ int main(int argc, char *argv[])
                 .setPoseTarget(target_pose);
 
             // -----------------------------------------------------
-            // TRAJECTORY SELECTION SETTINGS
+            // TRAJECTORY SETTINGS
             // -----------------------------------------------------
 
             constexpr int num_candidates = 10;
 
-            // Currently only collision / penetration is rejected.
-            // Replace with a validated physical margin later.
-            constexpr double
-                minimum_required_clearance = 0.0;
+            // Hard safety gate.
+            //
+            // Currently this rejects collision / penetration only.
+            // A validated physical safety margin can replace 0 later.
+            constexpr double minimum_required_clearance =
+                0.0;
 
-            // Treat sufficiently similar values as ties.
-            constexpr double
-                smoothness_epsilon = 1e-4;
+            // -----------------------------------------------------
+            // WEIGHTED MULTI-OBJECTIVE SETTINGS
+            //
+            // Total = 1.0
+            //
+            // Clearance receives highest weighting because
+            // protecting the Link 6 tooling is a priority.
+            // -----------------------------------------------------
 
-            constexpr double
-                path_length_epsilon = 1e-4;
+            constexpr double weight_clearance =
+                0.40;
 
-            constexpr double
-                duration_epsilon = 1e-3;
+            constexpr double weight_smoothness =
+                0.30;
 
-            MoveGroupInterface::Plan best_plan;
+            constexpr double weight_path_length =
+                0.20;
 
-            meca500_tasks::TrajectoryMetrics
-                best_metrics;
-
-            best_metrics.smoothness =
-                std::numeric_limits<double>::infinity();
-
-            best_metrics.path_length =
-                std::numeric_limits<double>::infinity();
-
-            best_metrics.duration =
-                std::numeric_limits<double>::infinity();
-
-            int best_candidate = -1;
+            constexpr double weight_duration =
+                0.10;
 
             int successful_plans = 0;
             int safe_plans = 0;
+
+            std::vector<Candidate>
+                safe_candidates;
 
             RCLCPP_INFO(
                 logger,
@@ -191,7 +206,7 @@ int main(int argc, char *argv[])
                 num_candidates);
 
             // -----------------------------------------------------
-            // GENERATE AND EVALUATE CANDIDATES
+            // GENERATE + EVALUATE ALL CANDIDATES
             // -----------------------------------------------------
 
             for (int i = 0;
@@ -268,93 +283,285 @@ int main(int argc, char *argv[])
 
                 ++safe_plans;
 
-                // -------------------------------------------------
-                // HIERARCHICAL / LEXICOGRAPHIC OPTIMISATION
-                //
-                // 1. Smoothness
-                // 2. Path length
-                // 3. Duration
-                //
-                // Clearance is a hard constraint.
-                // -------------------------------------------------
+                Candidate candidate;
 
-                bool is_better = false;
+                candidate.number =
+                    i + 1;
 
-                if (best_candidate == -1)
-                {
-                    is_better = true;
-                }
-                else if (
-                    metrics.smoothness <
-                    best_metrics.smoothness -
-                        smoothness_epsilon)
-                {
-                    is_better = true;
-                }
-                else if (
-                    std::abs(
-                        metrics.smoothness -
-                        best_metrics.smoothness) <=
-                    smoothness_epsilon)
-                {
-                    if (
-                        metrics.path_length <
-                        best_metrics.path_length -
-                            path_length_epsilon)
-                    {
-                        is_better = true;
-                    }
-                    else if (
-                        std::abs(
-                            metrics.path_length -
-                            best_metrics.path_length) <=
-                        path_length_epsilon)
-                    {
-                        if (
-                            metrics.duration <
-                            best_metrics.duration -
-                                duration_epsilon)
-                        {
-                            is_better = true;
-                        }
-                    }
-                }
+                candidate.plan =
+                    candidate_plan;
 
-                if (is_better)
-                {
-                    best_candidate = i + 1;
-                    best_plan = candidate_plan;
-                    best_metrics = metrics;
-                }
+                candidate.metrics =
+                    metrics;
+
+                safe_candidates.push_back(
+                    candidate);
             }
 
             // -----------------------------------------------------
-            // FINAL RESULT
+            // WEIGHTED TRAJECTORY SELECTION
             // -----------------------------------------------------
 
-            if (best_candidate != -1)
+            if (!safe_candidates.empty())
             {
+                // Find minimum and maximum values across
+                // all safe candidates.
+
+                double min_clearance =
+                    std::numeric_limits<double>::infinity();
+
+                double max_clearance =
+                    -std::numeric_limits<double>::infinity();
+
+                double min_smoothness =
+                    std::numeric_limits<double>::infinity();
+
+                double max_smoothness =
+                    -std::numeric_limits<double>::infinity();
+
+                double min_path_length =
+                    std::numeric_limits<double>::infinity();
+
+                double max_path_length =
+                    -std::numeric_limits<double>::infinity();
+
+                double min_duration =
+                    std::numeric_limits<double>::infinity();
+
+                double max_duration =
+                    -std::numeric_limits<double>::infinity();
+
+                for (const auto &candidate :
+                     safe_candidates)
+                {
+                    const auto &m =
+                        candidate.metrics;
+
+                    min_clearance =
+                        std::min(
+                            min_clearance,
+                            m.minimum_clearance);
+
+                    max_clearance =
+                        std::max(
+                            max_clearance,
+                            m.minimum_clearance);
+
+                    min_smoothness =
+                        std::min(
+                            min_smoothness,
+                            m.smoothness);
+
+                    max_smoothness =
+                        std::max(
+                            max_smoothness,
+                            m.smoothness);
+
+                    min_path_length =
+                        std::min(
+                            min_path_length,
+                            m.path_length);
+
+                    max_path_length =
+                        std::max(
+                            max_path_length,
+                            m.path_length);
+
+                    min_duration =
+                        std::min(
+                            min_duration,
+                            m.duration);
+
+                    max_duration =
+                        std::max(
+                            max_duration,
+                            m.duration);
+                }
+
+                // Min-max normalisation:
+                //
+                // x_hat =
+                // (x - x_min) /
+                // (x_max - x_min)
+                //
+                // This converts each metric to 0 -> 1.
+
+                auto normalise =
+                    [](double value,
+                       double min_value,
+                       double max_value)
+                {
+                    const double range =
+                        max_value - min_value;
+
+                    if (std::abs(range) < 1e-9)
+                    {
+                        return 0.0;
+                    }
+
+                    return
+                        (value - min_value) /
+                        range;
+                };
+
+                const bool clearance_varies =
+                    std::abs(
+                        max_clearance -
+                        min_clearance) >= 1e-9;
+
+                // -------------------------------------------------
+                // CALCULATE WEIGHTED COST
+                //
+                // J =
+                // 0.40(1 - C_hat)
+                // + 0.30 S_hat
+                // + 0.20 L_hat
+                // + 0.10 T_hat
+                //
+                // Lower J is better.
+                // -------------------------------------------------
+
+                for (auto &candidate :
+                     safe_candidates)
+                {
+                    const auto &m =
+                        candidate.metrics;
+
+                    const double
+                        clearance_normalised =
+                            normalise(
+                                m.minimum_clearance,
+                                min_clearance,
+                                max_clearance);
+
+                    const double
+                        smoothness_normalised =
+                            normalise(
+                                m.smoothness,
+                                min_smoothness,
+                                max_smoothness);
+
+                    const double
+                        path_length_normalised =
+                            normalise(
+                                m.path_length,
+                                min_path_length,
+                                max_path_length);
+
+                    const double
+                        duration_normalised =
+                            normalise(
+                                m.duration,
+                                min_duration,
+                                max_duration);
+
+                    // More clearance is better,
+                    // so invert the normalised value.
+                    //
+                    // If all candidates have exactly the
+                    // same clearance, clearance cannot
+                    // distinguish them and contributes zero.
+
+                    const double
+                        clearance_penalty =
+                            clearance_varies
+                                ? 1.0 -
+                                      clearance_normalised
+                                : 0.0;
+
+                    candidate.score =
+                        weight_clearance *
+                            clearance_penalty
+                        +
+                        weight_smoothness *
+                            smoothness_normalised
+                        +
+                        weight_path_length *
+                            path_length_normalised
+                        +
+                        weight_duration *
+                            duration_normalised;
+                }
+
+                // -------------------------------------------------
+                // PRINT WEIGHTED RESULTS
+                // -------------------------------------------------
+
+                RCLCPP_INFO(
+                    logger,
+                    "\n"
+                    "==============================\n"
+                    "WEIGHTED CANDIDATE SCORES\n"
+                    "==============================");
+
+                for (const auto &candidate :
+                     safe_candidates)
+                {
+                    RCLCPP_INFO(
+                        logger,
+                        "Candidate %d | Cost %.4f",
+                        candidate.number,
+                        candidate.score);
+                }
+
+                // -------------------------------------------------
+                // SELECT LOWEST COST
+                // -------------------------------------------------
+
+                const auto best_it =
+                    std::min_element(
+                        safe_candidates.begin(),
+                        safe_candidates.end(),
+                        [](const Candidate &a,
+                           const Candidate &b)
+                        {
+                            return
+                                a.score <
+                                b.score;
+                        });
+
+                const int best_candidate =
+                    best_it->number;
+
+                const auto best_plan =
+                    best_it->plan;
+
+                const auto best_metrics =
+                    best_it->metrics;
+
+                const double best_score =
+                    best_it->score;
+
+                // -------------------------------------------------
+                // FINAL RESULT
+                // -------------------------------------------------
+
                 RCLCPP_INFO(
                     logger,
                     "\n"
                     "==============================\n"
                     "TRAJECTORY SELECTION SUMMARY\n"
                     "==============================\n"
-                    "Planned successfully : %d/%d\n"
-                    "Passed safety gate    : %d/%d\n"
+                    "Selection method       : Weighted multi-objective\n"
+                    "Weights                : C=0.40 S=0.30 L=0.20 T=0.10\n"
                     "\n"
-                    "Selected candidate     : %d\n"
-                    "Clearance              : %.1f mm\n"
-                    "Closest pair           : %s <-> %s\n"
-                    "Smoothness             : %.6f\n"
-                    "Path length            : %.4f rad\n"
-                    "Duration               : %.3f s\n"
+                    "Planned successfully   : %d/%d\n"
+                    "Passed safety gate      : %d/%d\n"
+                    "\n"
+                    "Selected candidate      : %d\n"
+                    "Weighted cost           : %.4f\n"
+                    "Clearance               : %.1f mm\n"
+                    "Closest pair            : %s <-> %s\n"
+                    "Smoothness              : %.6f\n"
+                    "Path length             : %.4f rad\n"
+                    "Duration                : %.3f s\n"
                     "==============================",
                     successful_plans,
                     num_candidates,
                     safe_plans,
                     successful_plans,
                     best_candidate,
+                    best_score,
                     best_metrics.minimum_clearance *
                         1000.0,
                     best_metrics.closest_object_a.c_str(),
@@ -385,12 +592,13 @@ int main(int argc, char *argv[])
                     // -------------------------------------------------
 
                     const bool saved =
-                        meca500_tasks::saveTrajectory(
-                            trajectory_name,
-                            best_plan
-                                .trajectory
-                                .joint_trajectory,
-                            best_metrics);
+                        meca500_tasks::
+                            saveTrajectory(
+                                trajectory_name,
+                                best_plan
+                                    .trajectory
+                                    .joint_trajectory,
+                                best_metrics);
 
                     if (saved)
                     {
