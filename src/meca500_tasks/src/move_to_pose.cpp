@@ -15,7 +15,6 @@
 #include "meca500_tasks/trajectory_evaluator.hpp"
 #include "meca500_tasks/trajectory_library.hpp"
 
-
 struct Candidate
 {
     int number = -1;
@@ -27,7 +26,6 @@ struct Candidate
 
     double score = 0.0;
 };
-
 
 int main(int argc, char *argv[])
 {
@@ -164,41 +162,66 @@ int main(int argc, char *argv[])
             // TRAJECTORY SETTINGS
             // -----------------------------------------------------
 
-            constexpr int num_candidates = 10;
+            const int num_candidates =
+                node->get_parameter("num_candidates").as_int();
 
-            // Hard safety gate.
-            //
-            // Currently this rejects collision / penetration only.
-            // A validated physical safety margin can replace 0 later.
-            constexpr double minimum_required_clearance =
-                0.0;
+            const double minimum_required_clearance =
+                node->get_parameter(
+                        "minimum_required_clearance")
+                    .as_double();
+
+            const double weight_clearance =
+                node->get_parameter(
+                        "weight_clearance")
+                    .as_double();
+
+            const double weight_smoothness =
+                node->get_parameter(
+                        "weight_smoothness")
+                    .as_double();
+
+            const double weight_path_length =
+                node->get_parameter(
+                        "weight_path_length")
+                    .as_double();
+
+            const double weight_duration =
+                node->get_parameter(
+                        "weight_duration")
+                    .as_double();
+
+            if (num_candidates <= 0)
+            {
+                throw std::runtime_error(
+                    "num_candidates must be greater than 0.");
+            }
+
+            const double total_weight =
+                weight_clearance +
+                weight_smoothness +
+                weight_path_length +
+                weight_duration;
+
+            if (std::abs(total_weight - 1.0) > 1e-6)
+            {
+                throw std::runtime_error(
+                    "Trajectory weights must sum to 1.0.");
+            }
+
+            if (minimum_required_clearance < 0.0)
+            {
+                throw std::runtime_error(
+                    "minimum_required_clearance cannot be negative.");
+            }
 
             // -----------------------------------------------------
-            // WEIGHTED MULTI-OBJECTIVE SETTINGS
-            //
-            // Total = 1.0
-            //
-            // Clearance receives highest weighting because
-            // protecting the Link 6 tooling is a priority.
+            // CANDIDATE STORAGE / COUNTERS
             // -----------------------------------------------------
-
-            constexpr double weight_clearance =
-                0.40;
-
-            constexpr double weight_smoothness =
-                0.30;
-
-            constexpr double weight_path_length =
-                0.20;
-
-            constexpr double weight_duration =
-                0.10;
 
             int successful_plans = 0;
             int safe_plans = 0;
 
-            std::vector<Candidate>
-                safe_candidates;
+            std::vector<Candidate> safe_candidates;
 
             RCLCPP_INFO(
                 logger,
@@ -399,9 +422,8 @@ int main(int argc, char *argv[])
                         return 0.0;
                     }
 
-                    return
-                        (value - min_value) /
-                        range;
+                    return (value - min_value) /
+                           range;
                 };
 
                 const bool clearance_varies =
@@ -471,14 +493,11 @@ int main(int argc, char *argv[])
 
                     candidate.score =
                         weight_clearance *
-                            clearance_penalty
-                        +
+                            clearance_penalty +
                         weight_smoothness *
-                            smoothness_normalised
-                        +
+                            smoothness_normalised +
                         weight_path_length *
-                            path_length_normalised
-                        +
+                            path_length_normalised +
                         weight_duration *
                             duration_normalised;
                 }
@@ -515,9 +534,8 @@ int main(int argc, char *argv[])
                         [](const Candidate &a,
                            const Candidate &b)
                         {
-                            return
-                                a.score <
-                                b.score;
+                            return a.score <
+                                   b.score;
                         });
 
                 const int best_candidate =
@@ -543,7 +561,7 @@ int main(int argc, char *argv[])
                     "TRAJECTORY SELECTION SUMMARY\n"
                     "==============================\n"
                     "Selection method       : Weighted multi-objective\n"
-                    "Weights                : C=0.40 S=0.30 L=0.20 T=0.10\n"
+                    "Weights                : C=%.2f S=%.2f L=%.2f T=%.2f\n"
                     "\n"
                     "Planned successfully   : %d/%d\n"
                     "Passed safety gate      : %d/%d\n"
@@ -556,14 +574,19 @@ int main(int argc, char *argv[])
                     "Path length             : %.4f rad\n"
                     "Duration                : %.3f s\n"
                     "==============================",
+
+                    weight_clearance,
+                    weight_smoothness,
+                    weight_path_length,
+                    weight_duration,
+
                     successful_plans,
                     num_candidates,
                     safe_plans,
                     successful_plans,
                     best_candidate,
                     best_score,
-                    best_metrics.minimum_clearance *
-                        1000.0,
+                    best_metrics.minimum_clearance * 1000.0,
                     best_metrics.closest_object_a.c_str(),
                     best_metrics.closest_object_b.c_str(),
                     best_metrics.smoothness,
@@ -571,48 +594,33 @@ int main(int argc, char *argv[])
                     best_metrics.duration);
 
                 // -------------------------------------------------
-                // EXECUTION
+                // SAVE SELECTED TRAJECTORY
+                //
+                // Planning and execution are deliberately separated.
+                // This node only plans, evaluates, selects and saves.
+                // The saved trajectory can then be reviewed before
+                // go_to_trajectory_start + replay_trajectory.
                 // -------------------------------------------------
 
-                const auto result =
-                    move_group_interface.execute(
-                        best_plan);
+                const bool saved =
+                    meca500_tasks::
+                        saveTrajectory(
+                            trajectory_name,
+                            best_plan
+                                .trajectory
+                                .joint_trajectory,
+                            best_metrics);
 
-                if (
-                    result ==
-                    moveit::core::
-                        MoveItErrorCode::SUCCESS)
+                if (saved)
                 {
                     RCLCPP_INFO(
                         logger,
-                        "Selected trajectory executed successfully.");
+                        "Selected trajectory saved as '%s'.",
+                        trajectory_name.c_str());
 
-                    // -------------------------------------------------
-                    // SAVE SELECTED TRAJECTORY
-                    // -------------------------------------------------
-
-                    const bool saved =
-                        meca500_tasks::
-                            saveTrajectory(
-                                trajectory_name,
-                                best_plan
-                                    .trajectory
-                                    .joint_trajectory,
-                                best_metrics);
-
-                    if (saved)
-                    {
-                        RCLCPP_INFO(
-                            logger,
-                            "Saved trajectory '%s'.",
-                            trajectory_name.c_str());
-                    }
-                    else
-                    {
-                        RCLCPP_WARN(
-                            logger,
-                            "Failed to save selected trajectory.");
-                    }
+                    RCLCPP_INFO(
+                        logger,
+                        "Trajectory was NOT executed automatically.");
 
                     exit_code = 0;
                 }
@@ -620,7 +628,7 @@ int main(int argc, char *argv[])
                 {
                     RCLCPP_ERROR(
                         logger,
-                        "Execution of selected trajectory failed.");
+                        "Failed to save selected trajectory.");
                 }
             }
             else if (successful_plans > 0)
