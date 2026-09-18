@@ -177,8 +177,42 @@ int main(int argc, char *argv[])
         }
         else
         {
-            move_group_interface
-                .setStartStateToCurrentState();
+            // -----------------------------------------------------
+            // EXPLICIT NAMED START STATE
+            // -----------------------------------------------------
+
+            const std::vector<double> start_joints =
+                node->get_parameter(
+                        "start_joints")
+                    .as_double_array();
+
+            if (start_joints.size() != 6)
+            {
+                throw std::runtime_error(
+                    "start_joints must contain exactly 6 values.");
+            }
+
+            auto start_state =
+                *move_group_interface.getCurrentState();
+
+            const auto *joint_model_group =
+                start_state.getJointModelGroup(
+                    "meca_arm");
+
+            if (!joint_model_group)
+            {
+                throw std::runtime_error(
+                    "Could not find joint model group 'meca_arm'.");
+            }
+
+            start_state.setJointGroupPositions(
+                joint_model_group,
+                start_joints);
+
+            start_state.update();
+
+            move_group_interface.setStartState(
+                start_state);
 
             if (pose_type == "cartesian")
             {
@@ -635,6 +669,16 @@ int main(int argc, char *argv[])
                 // go_to_trajectory_start + replay_trajectory.
                 // -------------------------------------------------
 
+                const std::string start_pose_name =
+                    node->get_parameter(
+                            "start_pose_name")
+                        .as_string();
+
+                const std::string target_pose_name =
+                    node->get_parameter(
+                            "target_pose_name")
+                        .as_string();
+
                 const bool saved =
                     meca500_tasks::
                         saveTrajectory(
@@ -642,7 +686,15 @@ int main(int argc, char *argv[])
                             best_plan
                                 .trajectory
                                 .joint_trajectory,
-                            best_metrics);
+                            best_metrics,
+                            start_pose_name,
+                            target_pose_name,
+                            num_candidates,
+                            minimum_required_clearance,
+                            weight_clearance,
+                            weight_smoothness,
+                            weight_path_length,
+                            weight_duration);
 
                 if (saved)
                 {

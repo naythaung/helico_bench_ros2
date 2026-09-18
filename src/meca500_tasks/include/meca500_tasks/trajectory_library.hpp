@@ -15,206 +15,233 @@
 namespace meca500_tasks
 {
 
-inline bool saveTrajectory(
-    const std::string &name,
-    const trajectory_msgs::msg::JointTrajectory &trajectory,
-    const TrajectoryMetrics &metrics)
-{
-    const std::filesystem::path directory =
-        std::filesystem::current_path()
-        / "src"
-        / "meca500_tasks"
-        / "trajectories";
+     inline bool saveTrajectory(
+         const std::string &name,
+         const trajectory_msgs::msg::JointTrajectory &trajectory,
+         const TrajectoryMetrics &metrics,
+         const std::string &start_pose_name,
+         const std::string &target_pose_name,
+         int num_candidates,
+         double minimum_required_clearance,
+         double weight_clearance,
+         double weight_smoothness,
+         double weight_path_length,
+         double weight_duration)
+     {
+          const std::filesystem::path directory =
+              std::filesystem::current_path() / "src" / "meca500_tasks" / "trajectories";
 
-    std::filesystem::create_directories(directory);
+          std::filesystem::create_directories(directory);
 
-    const std::filesystem::path filepath =
-        directory / (name + ".yaml");
+          const std::filesystem::path filepath =
+              directory / (name + ".yaml");
 
-    std::ofstream file(filepath);
+          std::ofstream file(filepath);
 
-    if (!file.is_open())
-        return false;
+          if (!file.is_open())
+               return false;
 
-    file << std::setprecision(15);
+          file << std::setprecision(15);
 
-    // ---------------------------------------------------------
-    // METADATA
-    // ---------------------------------------------------------
+          // ---------------------------------------------------------
+          // METADATA
+          // ---------------------------------------------------------
 
-    file << "name: " << name << "\n";
+          file << "name: " << name << "\n";
 
-    file << "metrics:\n";
-    file << "  minimum_clearance: "
-         << metrics.minimum_clearance << "\n";
+          file << "start_pose: "
+               << start_pose_name << "\n";
 
-    file << "  closest_object_a: "
-         << metrics.closest_object_a << "\n";
+          file << "target_pose: "
+               << target_pose_name << "\n";
 
-    file << "  closest_object_b: "
-         << metrics.closest_object_b << "\n";
+          file << "planning:\n";
 
-    file << "  smoothness: "
-         << metrics.smoothness << "\n";
+          file << "  num_candidates: "
+               << num_candidates << "\n";
 
-    file << "  path_length: "
-         << metrics.path_length << "\n";
+          file << "  minimum_required_clearance: "
+               << minimum_required_clearance << "\n";
 
-    file << "  duration: "
-         << metrics.duration << "\n";
+          file << "  weight_clearance: "
+               << weight_clearance << "\n";
 
-    // ---------------------------------------------------------
-    // JOINT NAMES
-    // ---------------------------------------------------------
+          file << "  weight_smoothness: "
+               << weight_smoothness << "\n";
 
-    file << "joint_names:\n";
+          file << "  weight_path_length: "
+               << weight_path_length << "\n";
 
-    for (const auto &joint_name : trajectory.joint_names)
-    {
-        file << "  - " << joint_name << "\n";
-    }
+          file << "  weight_duration: "
+               << weight_duration << "\n";
 
-    // ---------------------------------------------------------
-    // TRAJECTORY POINTS
-    // ---------------------------------------------------------
+          file << "metrics:\n";
 
-    file << "points:\n";
+          file << "  minimum_clearance: "
+               << metrics.minimum_clearance << "\n";
 
-    for (const auto &point : trajectory.points)
-    {
-        file << "  - positions: [";
+          file << "  closest_object_a: "
+               << metrics.closest_object_a << "\n";
 
-        for (std::size_t i = 0;
-             i < point.positions.size();
-             ++i)
-        {
-            file << point.positions[i];
+          file << "  closest_object_b: "
+               << metrics.closest_object_b << "\n";
 
-            if (i + 1 < point.positions.size())
-                file << ", ";
-        }
+          file << "  smoothness: "
+               << metrics.smoothness << "\n";
 
-        file << "]\n";
+          file << "  path_length: "
+               << metrics.path_length << "\n";
 
-        file << "    velocities: [";
+          file << "  duration: "
+               << metrics.duration << "\n";
 
-        for (std::size_t i = 0;
-             i < point.velocities.size();
-             ++i)
-        {
-            file << point.velocities[i];
+          // ---------------------------------------------------------
+          // JOINT NAMES
+          // ---------------------------------------------------------
 
-            if (i + 1 < point.velocities.size())
-                file << ", ";
-        }
+          file << "joint_names:\n";
 
-        file << "]\n";
+          for (const auto &joint_name : trajectory.joint_names)
+          {
+               file << "  - " << joint_name << "\n";
+          }
 
-        file << "    accelerations: [";
+          // ---------------------------------------------------------
+          // TRAJECTORY POINTS
+          // ---------------------------------------------------------
 
-        for (std::size_t i = 0;
-             i < point.accelerations.size();
-             ++i)
-        {
-            file << point.accelerations[i];
+          file << "points:\n";
 
-            if (i + 1 < point.accelerations.size())
-                file << ", ";
-        }
+          for (const auto &point : trajectory.points)
+          {
+               file << "  - positions: [";
 
-        file << "]\n";
+               for (std::size_t i = 0;
+                    i < point.positions.size();
+                    ++i)
+               {
+                    file << point.positions[i];
 
-        file << "    time_from_start:\n";
-        file << "      sec: "
-             << point.time_from_start.sec << "\n";
-        file << "      nanosec: "
-             << point.time_from_start.nanosec << "\n";
-    }
+                    if (i + 1 < point.positions.size())
+                         file << ", ";
+               }
 
-    file.close();
+               file << "]\n";
 
-    return true;
-}
+               file << "    velocities: [";
 
+               for (std::size_t i = 0;
+                    i < point.velocities.size();
+                    ++i)
+               {
+                    file << point.velocities[i];
 
-inline bool loadTrajectory(
-    const std::string &name,
-    trajectory_msgs::msg::JointTrajectory &trajectory)
-{
-    const std::filesystem::path filepath =
-        std::filesystem::current_path()
-        / "src"
-        / "meca500_tasks"
-        / "trajectories"
-        / (name + ".yaml");
+                    if (i + 1 < point.velocities.size())
+                         file << ", ";
+               }
 
-    if (!std::filesystem::exists(filepath))
-        return false;
+               file << "]\n";
 
-    try
-    {
-        const YAML::Node root =
-            YAML::LoadFile(filepath.string());
+               file << "    accelerations: [";
 
-        trajectory.joint_names.clear();
-        trajectory.points.clear();
+               for (std::size_t i = 0;
+                    i < point.accelerations.size();
+                    ++i)
+               {
+                    file << point.accelerations[i];
 
-        // ---------------------------------------------------------
-        // JOINT NAMES
-        // ---------------------------------------------------------
+                    if (i + 1 < point.accelerations.size())
+                         file << ", ";
+               }
 
-        for (const auto &joint : root["joint_names"])
-        {
-            trajectory.joint_names.push_back(
-                joint.as<std::string>());
-        }
+               file << "]\n";
 
-        // ---------------------------------------------------------
-        // TRAJECTORY POINTS
-        // ---------------------------------------------------------
+               file << "    time_from_start:\n";
+               file << "      sec: "
+                    << point.time_from_start.sec << "\n";
+               file << "      nanosec: "
+                    << point.time_from_start.nanosec << "\n";
+          }
 
-        for (const auto &saved_point : root["points"])
-        {
-            trajectory_msgs::msg::JointTrajectoryPoint point;
+          file.close();
 
-            for (const auto &value :
-                 saved_point["positions"])
-            {
-                point.positions.push_back(
-                    value.as<double>());
-            }
+          return true;
+     }
 
-            for (const auto &value :
-                 saved_point["velocities"])
-            {
-                point.velocities.push_back(
-                    value.as<double>());
-            }
+     inline bool loadTrajectory(
+         const std::string &name,
+         trajectory_msgs::msg::JointTrajectory &trajectory)
+     {
+          const std::filesystem::path filepath =
+              std::filesystem::current_path() / "src" / "meca500_tasks" / "trajectories" / (name + ".yaml");
 
-            for (const auto &value :
-                 saved_point["accelerations"])
-            {
-                point.accelerations.push_back(
-                    value.as<double>());
-            }
+          if (!std::filesystem::exists(filepath))
+               return false;
 
-            point.time_from_start.sec =
-                saved_point["time_from_start"]["sec"]
-                    .as<int32_t>();
+          try
+          {
+               const YAML::Node root =
+                   YAML::LoadFile(filepath.string());
 
-            point.time_from_start.nanosec =
-                saved_point["time_from_start"]["nanosec"]
-                    .as<uint32_t>();
+               trajectory.joint_names.clear();
+               trajectory.points.clear();
 
-            trajectory.points.push_back(point);
-        }
+               // ---------------------------------------------------------
+               // JOINT NAMES
+               // ---------------------------------------------------------
 
-        return !trajectory.points.empty();
-    }
-    catch (const std::exception &)
-    {
-        return false;
-    }
-}
+               for (const auto &joint : root["joint_names"])
+               {
+                    trajectory.joint_names.push_back(
+                        joint.as<std::string>());
+               }
+
+               // ---------------------------------------------------------
+               // TRAJECTORY POINTS
+               // ---------------------------------------------------------
+
+               for (const auto &saved_point : root["points"])
+               {
+                    trajectory_msgs::msg::JointTrajectoryPoint point;
+
+                    for (const auto &value :
+                         saved_point["positions"])
+                    {
+                         point.positions.push_back(
+                             value.as<double>());
+                    }
+
+                    for (const auto &value :
+                         saved_point["velocities"])
+                    {
+                         point.velocities.push_back(
+                             value.as<double>());
+                    }
+
+                    for (const auto &value :
+                         saved_point["accelerations"])
+                    {
+                         point.accelerations.push_back(
+                             value.as<double>());
+                    }
+
+                    point.time_from_start.sec =
+                        saved_point["time_from_start"]["sec"]
+                            .as<int32_t>();
+
+                    point.time_from_start.nanosec =
+                        saved_point["time_from_start"]["nanosec"]
+                            .as<uint32_t>();
+
+                    trajectory.points.push_back(point);
+               }
+
+               return !trajectory.points.empty();
+          }
+          catch (const std::exception &)
+          {
+               return false;
+          }
+     }
 
 } // namespace meca500_tasks

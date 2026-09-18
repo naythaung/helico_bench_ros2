@@ -39,8 +39,12 @@ def launch_setup(context):
     # 1. Launch arguments
     # ---------------------------------------------------------
 
-    pose_name = LaunchConfiguration(
-        "pose"
+    start_pose_name = LaunchConfiguration(
+        "start_pose"
+    ).perform(context)
+
+    target_pose_name = LaunchConfiguration(
+        "target_pose"
     ).perform(context)
 
     trajectory_name = LaunchConfiguration(
@@ -84,7 +88,7 @@ def launch_setup(context):
     )
 
     # ---------------------------------------------------------
-    # 2. Load saved target pose
+    # 2. Load saved poses
     # ---------------------------------------------------------
 
     poses_path = os.path.join(
@@ -96,39 +100,52 @@ def launch_setup(context):
     with open(poses_path, "r") as file:
         poses = yaml.safe_load(file)
 
-    if pose_name not in poses:
+    if start_pose_name not in poses:
         raise RuntimeError(
-            f"Unknown pose '{pose_name}'. "
+            f"Unknown start pose '{start_pose_name}'. "
             f"Available poses: {list(poses.keys())}"
         )
 
-    pose = poses[pose_name]
-
-    if "type" not in pose:
+    if target_pose_name not in poses:
         raise RuntimeError(
-            f"Pose '{pose_name}' has no 'type'. "
-            f"Expected 'cartesian' or 'joint'."
+            f"Unknown target pose '{target_pose_name}'. "
+            f"Available poses: {list(poses.keys())}"
         )
 
-    pose_type = pose["type"]
+    start_pose = poses[start_pose_name]
+    target_pose = poses[target_pose_name]
 
-    if pose_type not in ["cartesian", "joint"]:
+    # Start state is deliberately joint-space for now.
+    if start_pose.get("type") != "joint":
         raise RuntimeError(
-            f"Pose '{pose_name}' has invalid type "
-            f"'{pose_type}'."
+            f"Start pose '{start_pose_name}' must currently "
+            "be a joint pose."
         )
 
-    print(f"Selected saved pose: {pose_name}")
-    print(f"Pose type: {pose_type}")
-    print(pose)
+    if len(start_pose.get("joints", [])) != 6:
+        raise RuntimeError(
+            f"Start pose '{start_pose_name}' must contain "
+            "exactly 6 joint values."
+        )
+
+    target_pose_type = target_pose.get("type")
+
+    if target_pose_type not in ["cartesian", "joint"]:
+        raise RuntimeError(
+            f"Target pose '{target_pose_name}' has invalid type "
+            f"'{target_pose_type}'."
+        )
 
     print(
-        "Trajectory planning settings:"
+        f"Planning: {start_pose_name} -> {target_pose_name}"
     )
 
     print(
-        f"  Candidates        : {num_candidates}"
+        f"Target pose type: {target_pose_type}"
     )
+
+    print("Trajectory planning settings:")
+    print(f"  Candidates        : {num_candidates}")
 
     print(
         "  Minimum clearance : "
@@ -144,7 +161,7 @@ def launch_setup(context):
     )
 
     # ---------------------------------------------------------
-    # 3. Load same robot model as main MoveIt launch
+    # 3. Robot model
     # ---------------------------------------------------------
 
     robot_description_content = ParameterValue(
@@ -196,7 +213,34 @@ def launch_setup(context):
     }
 
     # ---------------------------------------------------------
-    # 4. Start move_to_pose node
+    # 4. Target parameters
+    # ---------------------------------------------------------
+
+    target_parameters = {
+        "pose_type": target_pose_type,
+    }
+
+    if target_pose_type == "cartesian":
+        target_parameters.update(
+            {
+                "x": float(target_pose["x"]),
+                "y": float(target_pose["y"]),
+                "z": float(target_pose["z"]),
+                "qx": float(target_pose["qx"]),
+                "qy": float(target_pose["qy"]),
+                "qz": float(target_pose["qz"]),
+                "qw": float(target_pose["qw"]),
+            }
+        )
+
+    else:
+        target_parameters["joints"] = [
+            float(value)
+            for value in target_pose["joints"]
+        ]
+
+    # ---------------------------------------------------------
+    # 5. Start planner node
     # ---------------------------------------------------------
 
     move_node = Node(
@@ -210,13 +254,20 @@ def launch_setup(context):
             robot_description_kinematics,
             robot_description_planning,
 
+            target_parameters,
+
             {
-                "pose_type": pose_type,
-            },
-            
-            pose,
-            
-            {
+                "start_pose_name":
+                    start_pose_name,
+
+                "target_pose_name":
+                    target_pose_name,
+
+                "start_joints": [
+                    float(value)
+                    for value in start_pose["joints"]
+                ],
+
                 "trajectory_name":
                     trajectory_name,
 
@@ -249,71 +300,51 @@ def generate_launch_description():
     return LaunchDescription(
         [
             DeclareLaunchArgument(
-                "pose",
+                "start_pose",
+                default_value="meca_zero",
+                description="Named joint-space start pose",
+            ),
+
+            DeclareLaunchArgument(
+                "target_pose",
                 default_value="meca_demo",
-                description=(
-                    "Name of target pose in poses.yaml"
-                ),
+                description="Named target pose",
             ),
 
             DeclareLaunchArgument(
                 "trajectory_name",
                 default_value="latest_selected",
-                description=(
-                    "Name used when saving "
-                    "selected trajectory"
-                ),
+                description="Saved trajectory name",
             ),
 
             DeclareLaunchArgument(
                 "num_candidates",
                 default_value="10",
-                description=(
-                    "Number of trajectory "
-                    "candidates to generate"
-                ),
             ),
 
             DeclareLaunchArgument(
                 "minimum_required_clearance",
                 default_value="0.0",
-                description=(
-                    "Minimum allowed sampled "
-                    "clearance in metres"
-                ),
             ),
 
             DeclareLaunchArgument(
                 "weight_clearance",
                 default_value="0.40",
-                description=(
-                    "Weight assigned to clearance"
-                ),
             ),
 
             DeclareLaunchArgument(
                 "weight_smoothness",
                 default_value="0.30",
-                description=(
-                    "Weight assigned to smoothness"
-                ),
             ),
 
             DeclareLaunchArgument(
                 "weight_path_length",
                 default_value="0.20",
-                description=(
-                    "Weight assigned to "
-                    "joint-space path length"
-                ),
             ),
 
             DeclareLaunchArgument(
                 "weight_duration",
                 default_value="0.10",
-                description=(
-                    "Weight assigned to duration"
-                ),
             ),
 
             OpaqueFunction(
