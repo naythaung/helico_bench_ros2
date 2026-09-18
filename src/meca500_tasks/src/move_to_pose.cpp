@@ -121,28 +121,53 @@ int main(int argc, char *argv[])
         // TARGET POSE
         // ---------------------------------------------------------
 
+        const std::string pose_type =
+            node->get_parameter("pose_type").as_string();
+
         geometry_msgs::msg::Pose target_pose;
 
-        target_pose.position.x =
-            node->get_parameter("x").as_double();
+        std::vector<double> target_joints;
 
-        target_pose.position.y =
-            node->get_parameter("y").as_double();
+        if (pose_type == "cartesian")
+        {
+            target_pose.position.x =
+                node->get_parameter("x").as_double();
 
-        target_pose.position.z =
-            node->get_parameter("z").as_double();
+            target_pose.position.y =
+                node->get_parameter("y").as_double();
 
-        target_pose.orientation.x =
-            node->get_parameter("qx").as_double();
+            target_pose.position.z =
+                node->get_parameter("z").as_double();
 
-        target_pose.orientation.y =
-            node->get_parameter("qy").as_double();
+            target_pose.orientation.x =
+                node->get_parameter("qx").as_double();
 
-        target_pose.orientation.z =
-            node->get_parameter("qz").as_double();
+            target_pose.orientation.y =
+                node->get_parameter("qy").as_double();
 
-        target_pose.orientation.w =
-            node->get_parameter("qw").as_double();
+            target_pose.orientation.z =
+                node->get_parameter("qz").as_double();
+
+            target_pose.orientation.w =
+                node->get_parameter("qw").as_double();
+        }
+        else if (pose_type == "joint")
+        {
+            target_joints =
+                node->get_parameter("joints")
+                    .as_double_array();
+
+            if (target_joints.size() != 6)
+            {
+                throw std::runtime_error(
+                    "Joint pose must contain exactly 6 joint values.");
+            }
+        }
+        else
+        {
+            throw std::runtime_error(
+                "Unknown pose_type: " + pose_type);
+        }
 
         if (!move_group_interface.getCurrentState(10.0))
         {
@@ -155,8 +180,16 @@ int main(int argc, char *argv[])
             move_group_interface
                 .setStartStateToCurrentState();
 
-            move_group_interface
-                .setPoseTarget(target_pose);
+            if (pose_type == "cartesian")
+            {
+                move_group_interface
+                    .setPoseTarget(target_pose);
+            }
+            else
+            {
+                move_group_interface
+                    .setJointValueTarget(target_joints);
+            }
 
             // -----------------------------------------------------
             // TRAJECTORY SETTINGS

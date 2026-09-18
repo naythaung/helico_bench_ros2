@@ -104,7 +104,22 @@ def launch_setup(context):
 
     pose = poses[pose_name]
 
-    print(f"Moving to saved pose: {pose_name}")
+    if "type" not in pose:
+        raise RuntimeError(
+            f"Pose '{pose_name}' has no 'type'. "
+            f"Expected 'cartesian' or 'joint'."
+        )
+
+    pose_type = pose["type"]
+
+    if pose_type not in ["cartesian", "joint"]:
+        raise RuntimeError(
+            f"Pose '{pose_name}' has invalid type "
+            f"'{pose_type}'."
+        )
+
+    print(f"Selected saved pose: {pose_name}")
+    print(f"Pose type: {pose_type}")
     print(pose)
 
     print(
@@ -195,8 +210,12 @@ def launch_setup(context):
             robot_description_kinematics,
             robot_description_planning,
 
+            {
+                "pose_type": pose_type,
+            },
+            
             pose,
-
+            
             {
                 "trajectory_name":
                     trajectory_name,

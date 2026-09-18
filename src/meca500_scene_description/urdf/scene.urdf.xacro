@@ -86,8 +86,8 @@
   <joint name="link_6_to_tools_mount" type="fixed">
     <parent link="link_6" />
     <child link="tools_mount" />
-    <origin xyz="-0.00548008 0.00548008 0"
-      rpy="-1.5708 0 1.5708" />
+    <origin xyz="0.00548008 0.00548008 0"
+      rpy="-1.5708 0 0" />
   </joint>
 
 
