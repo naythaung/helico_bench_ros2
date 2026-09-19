@@ -11,6 +11,7 @@ find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
+find_package(meca500_interfaces REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -64,6 +65,24 @@ add_executable(go_to_trajectory_start
   src/go_to_trajectory_start.cpp
 )
 
+# Workbench backend server
+add_executable(workbench_server
+  src/workbench_server.cpp
+)
+
+target_compile_features(workbench_server PUBLIC cxx_std_17)
+
+target_include_directories(workbench_server PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
+target_link_libraries(workbench_server PRIVATE
+  rclcpp::rclcpp
+  ${meca500_interfaces_TARGETS}
+  yaml-cpp
+)
+
 target_compile_features(go_to_trajectory_start PUBLIC cxx_std_17)
 
 target_include_directories(go_to_trajectory_start PUBLIC
@@ -82,6 +101,7 @@ install(TARGETS
   move_to_pose
   replay_trajectory
   go_to_trajectory_start
+  workbench_server
   DESTINATION lib/${PROJECT_NAME}
 )
 
