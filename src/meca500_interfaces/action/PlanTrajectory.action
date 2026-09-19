@@ -1,0 +1,30 @@
+string start_pose
+string target_pose
+string trajectory_name
+
+int32 num_candidates
+
+float64 minimum_required_clearance
+
+float64 weight_clearance
+float64 weight_smoothness
+float64 weight_path_length
+float64 weight_duration
+
+---
+bool success
+string message
+
+string trajectory_name
+int32 selected_candidate
+
+float64 weighted_cost
+float64 minimum_clearance
+float64 smoothness
+float64 path_length
+float64 duration
+
+---
+int32 current_candidate
+int32 total_candidates
+string status
