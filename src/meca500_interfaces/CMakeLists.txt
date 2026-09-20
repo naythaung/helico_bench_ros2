@@ -9,6 +9,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/ListPoses.srv"
   "srv/DeletePose.srv"
   "srv/ListTrajectories.srv"
+  "srv/InspectTrajectory.srv"
+  "srv/DeleteTrajectory.srv"
 
   "action/PlanTrajectory.action"
   "action/GoToTrajectoryStart.action"

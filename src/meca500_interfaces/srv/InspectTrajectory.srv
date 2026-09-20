@@ -1,0 +1,24 @@
+string name
+---
+bool success
+string message
+
+string start_pose
+string target_pose
+
+int32 num_candidates
+
+float64 minimum_required_clearance
+
+float64 weight_clearance
+float64 weight_smoothness
+float64 weight_path_length
+float64 weight_duration
+
+float64 minimum_clearance
+string closest_object_a
+string closest_object_b
+float64 smoothness
+float64 path_length
+float64 duration
+
