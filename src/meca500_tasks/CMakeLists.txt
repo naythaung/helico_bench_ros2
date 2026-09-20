@@ -124,12 +124,39 @@ target_link_libraries(go_to_trajectory_start PRIVATE
   yaml-cpp
 )
 
+# Trajectory execution action server
+add_executable(trajectory_execution_server
+  src/trajectory_execution_server.cpp
+)
+
+target_compile_features(
+  trajectory_execution_server
+  PUBLIC cxx_std_17
+)
+
+target_include_directories(
+  trajectory_execution_server PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
+target_link_libraries(
+  trajectory_execution_server PRIVATE
+  rclcpp::rclcpp
+  rclcpp_action::rclcpp_action
+  ${trajectory_msgs_TARGETS}
+  ${moveit_ros_planning_interface_TARGETS}
+  ${meca500_interfaces_TARGETS}
+  yaml-cpp
+)
+
 install(TARGETS
   move_to_pose
   replay_trajectory
   go_to_trajectory_start
   workbench_server
   plan_trajectory_server
+  trajectory_execution_server
   DESTINATION lib/${PROJECT_NAME}
 )
 
