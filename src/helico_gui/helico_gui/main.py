@@ -8,6 +8,7 @@ from rclpy.action import ActionClient
 from meca500_interfaces.srv import (
     ListPoses,
     ListTrajectories,
+    InspectTrajectory,
 )
 
 from meca500_interfaces.action import (
@@ -26,7 +27,7 @@ class HelicoGui(Node):
 
         self.root.title("Meca500 Workbench")
 
-        self.root.geometry("780x600")
+        self.root.geometry("900x1100")
 
         # ---------------------------------------------------------
         # ROS SERVICE CLIENTS
@@ -40,6 +41,11 @@ class HelicoGui(Node):
         self.list_trajectories_client = self.create_client(
             ListTrajectories,
             "/meca/list_trajectories",
+        )
+
+        self.inspect_trajectory_client = self.create_client(
+            InspectTrajectory,
+            "/meca/inspect_trajectory",
         )
 
         # ---------------------------------------------------------
@@ -304,6 +310,11 @@ class HelicoGui(Node):
             expand=True,
         )
 
+        self.trajectory_list.bind(
+            "<<ListboxSelect>>",
+            self.on_trajectory_selected,
+        )
+
         button_frame = ttk.Frame(
             trajectory_frame,
         )
@@ -343,6 +354,31 @@ class HelicoGui(Node):
         self.execute_button.pack(
             side="left",
             padx=5,
+        )
+        
+        details_frame = ttk.LabelFrame(
+            main,
+            text="Trajectory Details",
+            padding=10,
+        )
+
+        details_frame.pack(
+            fill="x",
+            pady=(15, 0),
+        )
+
+        self.trajectory_details_var = tk.StringVar(
+            value="Select a saved trajectory."
+        )
+
+        self.trajectory_details_label = ttk.Label(
+            details_frame,
+            textvariable=self.trajectory_details_var,
+            justify="left",
+        )
+
+        self.trajectory_details_label.pack(
+            anchor="w",
         )
 
     # =============================================================
@@ -413,40 +449,26 @@ class HelicoGui(Node):
 
             response = future.result()
 
-            poses = list(
-                response.names
-            )
+            poses = list(response.names)
 
-            pose_types = list(
-                response.types
-            )
+            pose_types = list(response.types)
 
             joint_poses = [
                 name
-                for name, pose_type
-                in zip(poses, pose_types)
+                for name, pose_type in zip(poses, pose_types)
                 if pose_type == "joint"
             ]
 
-            self.start_pose_box[
-                "values"
-            ] = joint_poses
+            self.start_pose_box["values"] = joint_poses
 
-            self.target_pose_box[
-                "values"
-            ] = poses
+            self.target_pose_box["values"] = poses
 
             if poses:
 
                 if "meca_zero" in poses:
                     self.start_pose_box.set("meca_zero")
-                elif (
-                    joint_poses
-                    and not self.start_pose_box.get()
-                ):
-                    self.start_pose_box.set(
-                        joint_poses[0]
-                )
+                elif joint_poses and not self.start_pose_box.get():
+                    self.start_pose_box.set(joint_poses[0])
 
                 if "meca_demo" in poses:
                     self.target_pose_box.set("meca_demo")
@@ -633,6 +655,106 @@ class HelicoGui(Node):
 
         return self.trajectory_list.get(selection[0])
 
+
+    def on_trajectory_selected(
+            self,
+            event=None,
+        ):
+
+            selection = (
+                self.trajectory_list
+                .curselection()
+            )
+
+            if not selection:
+                return
+
+            name = (
+                self.trajectory_list
+                .get(selection[0])
+            )
+
+            self.inspect_trajectory(
+                name
+            )
+
+
+    def inspect_trajectory(
+        self,
+        name,
+    ):
+
+        if not (
+            self.inspect_trajectory_client
+            .service_is_ready()
+        ):
+
+            self.trajectory_details_var.set(
+                "Trajectory inspection service is not ready."
+            )
+
+            return
+
+        request = (
+            InspectTrajectory.Request()
+        )
+
+        request.name = name
+
+        future = (
+            self.inspect_trajectory_client
+            .call_async(request)
+        )
+
+        future.add_done_callback(
+            self.trajectory_details_received
+        )
+
+
+    def trajectory_details_received(
+        self,
+        future,
+    ):
+
+        try:
+
+            response = future.result()
+
+            if not response.success:
+
+                self.trajectory_details_var.set(
+                    response.message
+                )
+
+                return
+
+            details = (
+                f"Start pose: {response.start_pose}\n"
+                f"Target pose: {response.target_pose}\n"
+                f"Candidates: {response.num_candidates}\n"
+                f"Minimum clearance: "
+                f"{response.minimum_clearance * 1000:.1f} mm\n"
+                f"Closest objects: "
+                f"{response.closest_object_a} ↔ "
+                f"{response.closest_object_b}\n"
+                f"Smoothness: "
+                f"{response.smoothness:.6f}\n"
+                f"Path length: "
+                f"{response.path_length:.4f} rad\n"
+                f"Duration: "
+                f"{response.duration:.3f} s"
+            )
+
+            self.trajectory_details_var.set(
+                details
+            )
+
+        except Exception as error:
+
+            self.trajectory_details_var.set(
+                f"Inspection failed: {error}"
+            )
+    
     # =============================================================
     # GO TO START
     # =============================================================
