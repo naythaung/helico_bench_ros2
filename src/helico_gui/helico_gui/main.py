@@ -24,58 +24,44 @@ class HelicoGui(Node):
 
         self.root = root
 
-        self.root.title(
-            "Meca500 Workbench"
-        )
+        self.root.title("Meca500 Workbench")
 
-        self.root.geometry(
-            "780x600"
-        )
+        self.root.geometry("780x600")
 
         # ---------------------------------------------------------
         # ROS SERVICE CLIENTS
         # ---------------------------------------------------------
 
-        self.list_poses_client = (
-            self.create_client(
-                ListPoses,
-                "/meca/list_poses",
-            )
+        self.list_poses_client = self.create_client(
+            ListPoses,
+            "/meca/list_poses",
         )
 
-        self.list_trajectories_client = (
-            self.create_client(
-                ListTrajectories,
-                "/meca/list_trajectories",
-            )
+        self.list_trajectories_client = self.create_client(
+            ListTrajectories,
+            "/meca/list_trajectories",
         )
 
         # ---------------------------------------------------------
         # ROS ACTION CLIENTS
         # ---------------------------------------------------------
 
-        self.plan_client = (
-            ActionClient(
-                self,
-                PlanTrajectory,
-                "/meca/plan_trajectory",
-            )
+        self.plan_client = ActionClient(
+            self,
+            PlanTrajectory,
+            "/meca/plan_trajectory",
         )
 
-        self.go_to_start_client = (
-            ActionClient(
-                self,
-                GoToTrajectoryStart,
-                "/meca/go_to_trajectory_start",
-            )
+        self.go_to_start_client = ActionClient(
+            self,
+            GoToTrajectoryStart,
+            "/meca/go_to_trajectory_start",
         )
 
-        self.execute_client = (
-            ActionClient(
-                self,
-                ExecuteTrajectory,
-                "/meca/execute_trajectory",
-            )
+        self.execute_client = ActionClient(
+            self,
+            ExecuteTrajectory,
+            "/meca/execute_trajectory",
         )
 
         # ---------------------------------------------------------
@@ -97,7 +83,6 @@ class HelicoGui(Node):
             50,
             self.spin_ros,
         )
-
 
     # =============================================================
     # GUI
@@ -234,9 +219,7 @@ class HelicoGui(Node):
             width=8,
         )
 
-        self.candidate_spinbox.set(
-            3
-        )
+        self.candidate_spinbox.set(3)
 
         self.candidate_spinbox.grid(
             row=3,
@@ -274,9 +257,7 @@ class HelicoGui(Node):
             pady=(0, 15),
         )
 
-        self.status_var = tk.StringVar(
-            value="Starting..."
-        )
+        self.status_var = tk.StringVar(value="Starting...")
 
         self.status_label = ttk.Label(
             status_frame,
@@ -364,7 +345,6 @@ class HelicoGui(Node):
             padx=5,
         )
 
-
     # =============================================================
     # ROS EVENT LOOP
     # =============================================================
@@ -383,67 +363,49 @@ class HelicoGui(Node):
                 self.spin_ros,
             )
 
-
     # =============================================================
     # REFRESH
     # =============================================================
 
     def wait_for_backend(self):
 
-        poses_ready = (
-            self.list_poses_client.service_is_ready()
-        )
+        poses_ready = self.list_poses_client.service_is_ready()
 
-        trajectories_ready = (
-            self.list_trajectories_client.service_is_ready()
-        )
+        trajectories_ready = self.list_trajectories_client.service_is_ready()
 
         if poses_ready and trajectories_ready:
 
-            self.status_var.set(
-                "Backend connected."
-            )
+            self.status_var.set("Backend connected.")
 
             self.refresh_all()
 
         else:
 
-            self.status_var.set(
-                "Waiting for workbench backend..."
-            )
+            self.status_var.set("Waiting for workbench backend...")
 
             self.root.after(
                 500,
                 self.wait_for_backend,
             )
-    
+
     def refresh_all(self):
 
         self.refresh_poses()
         self.refresh_trajectories()
 
-
     def refresh_poses(self):
 
         if not self.list_poses_client.service_is_ready():
 
-            self.status_var.set(
-                "Waiting for workbench server..."
-            )
+            self.status_var.set("Waiting for workbench server...")
 
             return
 
         request = ListPoses.Request()
 
-        future = (
-            self.list_poses_client
-            .call_async(request)
-        )
+        future = self.list_poses_client.call_async(request)
 
-        future.add_done_callback(
-            self.poses_received
-        )
-
+        future.add_done_callback(self.poses_received)
 
     def poses_received(self, future):
 
@@ -455,9 +417,20 @@ class HelicoGui(Node):
                 response.names
             )
 
+            pose_types = list(
+                response.types
+            )
+
+            joint_poses = [
+                name
+                for name, pose_type
+                in zip(poses, pose_types)
+                if pose_type == "joint"
+            ]
+
             self.start_pose_box[
                 "values"
-            ] = poses
+            ] = joint_poses
 
             self.target_pose_box[
                 "values"
@@ -465,58 +438,35 @@ class HelicoGui(Node):
 
             if poses:
 
-                if (
-                    "meca_zero"
-                    in poses
+                if "meca_zero" in poses:
+                    self.start_pose_box.set("meca_zero")
+                elif (
+                    joint_poses
+                    and not self.start_pose_box.get()
                 ):
                     self.start_pose_box.set(
-                        "meca_zero"
-                    )
-                elif not self.start_pose_box.get():
-                    self.start_pose_box.set(
-                        poses[0]
-                    )
+                        joint_poses[0]
+                )
 
-                if (
-                    "meca_demo"
-                    in poses
-                ):
-                    self.target_pose_box.set(
-                        "meca_demo"
-                    )
+                if "meca_demo" in poses:
+                    self.target_pose_box.set("meca_demo")
                 elif not self.target_pose_box.get():
-                    self.target_pose_box.set(
-                        poses[0]
-                    )
+                    self.target_pose_box.set(poses[0])
 
         except Exception as error:
 
-            self.status_var.set(
-                f"Pose refresh failed: {error}"
-            )
-
+            self.status_var.set(f"Pose refresh failed: {error}")
 
     def refresh_trajectories(self):
 
-        if not (
-            self.list_trajectories_client
-            .service_is_ready()
-        ):
+        if not (self.list_trajectories_client.service_is_ready()):
             return
 
-        request = (
-            ListTrajectories.Request()
-        )
+        request = ListTrajectories.Request()
 
-        future = (
-            self.list_trajectories_client
-            .call_async(request)
-        )
+        future = self.list_trajectories_client.call_async(request)
 
-        future.add_done_callback(
-            self.trajectories_received
-        )
-
+        future.add_done_callback(self.trajectories_received)
 
     def trajectories_received(
         self,
@@ -539,16 +489,11 @@ class HelicoGui(Node):
                     name,
                 )
 
-            self.status_var.set(
-                "Ready"
-            )
+            self.status_var.set("Ready")
 
         except Exception as error:
 
-            self.status_var.set(
-                f"Trajectory refresh failed: {error}"
-            )
-
+            self.status_var.set(f"Trajectory refresh failed: {error}")
 
     # =============================================================
     # PLAN
@@ -556,49 +501,33 @@ class HelicoGui(Node):
 
     def plan_trajectory(self):
 
-        start_pose = (
-            self.start_pose_box.get()
-        )
+        start_pose = self.start_pose_box.get()
 
-        target_pose = (
-            self.target_pose_box.get()
-        )
+        target_pose = self.target_pose_box.get()
 
-        trajectory_name = (
-            self.trajectory_name_entry
-            .get()
-            .strip()
-        )
+        trajectory_name = self.trajectory_name_entry.get().strip()
 
         if not start_pose:
 
-            self.status_var.set(
-                "Select a start pose."
-            )
+            self.status_var.set("Select a start pose.")
 
             return
 
         if not target_pose:
 
-            self.status_var.set(
-                "Select a target pose."
-            )
+            self.status_var.set("Select a target pose.")
 
             return
 
         if not trajectory_name:
 
-            self.status_var.set(
-                "Enter a trajectory name."
-            )
+            self.status_var.set("Enter a trajectory name.")
 
             return
 
         if not self.plan_client.server_is_ready():
 
-            self.status_var.set(
-                "Planning server is not running."
-            )
+            self.status_var.set("Planning server is not running.")
 
             return
 
@@ -608,65 +537,40 @@ class HelicoGui(Node):
         goal.target_pose = target_pose
         goal.trajectory_name = trajectory_name
 
-        goal.num_candidates = int(
-            self.candidate_spinbox.get()
-        )
+        goal.num_candidates = int(self.candidate_spinbox.get())
 
-        goal.minimum_required_clearance = (
-            0.0
-        )
+        goal.minimum_required_clearance = 0.0
 
         goal.weight_clearance = 0.4
         goal.weight_smoothness = 0.3
         goal.weight_path_length = 0.2
         goal.weight_duration = 0.1
 
-        self.status_var.set(
-            "Sending planning request..."
-        )
+        self.status_var.set("Sending planning request...")
 
         self.progress["value"] = 0
 
-        future = (
-            self.plan_client
-            .send_goal_async(
-                goal,
-                feedback_callback=(
-                    self.plan_feedback
-                ),
-            )
+        future = self.plan_client.send_goal_async(
+            goal,
+            feedback_callback=(self.plan_feedback),
         )
 
-        future.add_done_callback(
-            self.plan_goal_response
-        )
-
+        future.add_done_callback(self.plan_goal_response)
 
     def plan_feedback(
         self,
         feedback_msg,
     ):
 
-        feedback = (
-            feedback_msg.feedback
-        )
+        feedback = feedback_msg.feedback
 
-        self.status_var.set(
-            feedback.status
-        )
+        self.status_var.set(feedback.status)
 
         if feedback.total_candidates > 0:
 
-            progress = (
-                feedback.current_candidate
-                / feedback.total_candidates
-                * 100.0
-            )
+            progress = feedback.current_candidate / feedback.total_candidates * 100.0
 
-            self.progress[
-                "value"
-            ] = progress
-
+            self.progress["value"] = progress
 
     def plan_goal_response(
         self,
@@ -677,35 +581,22 @@ class HelicoGui(Node):
 
         if not goal_handle.accepted:
 
-            self.status_var.set(
-                "Planning goal rejected."
-            )
+            self.status_var.set("Planning goal rejected.")
 
             return
 
-        self.status_var.set(
-            "Planning..."
-        )
+        self.status_var.set("Planning...")
 
-        result_future = (
-            goal_handle
-            .get_result_async()
-        )
+        result_future = goal_handle.get_result_async()
 
-        result_future.add_done_callback(
-            self.plan_result
-        )
-
+        result_future.add_done_callback(self.plan_result)
 
     def plan_result(
         self,
         future,
     ):
 
-        result = (
-            future.result()
-            .result
-        )
+        result = future.result().result
 
         if result.success:
 
@@ -718,19 +609,13 @@ class HelicoGui(Node):
                 f"{result.minimum_clearance * 1000:.1f} mm"
             )
 
-            self.progress[
-                "value"
-            ] = 100
+            self.progress["value"] = 100
 
             self.refresh_trajectories()
 
         else:
 
-            self.status_var.set(
-                "Planning failed: "
-                + result.message
-            )
-
+            self.status_var.set("Planning failed: " + result.message)
 
     # =============================================================
     # SELECTED TRAJECTORY
@@ -738,24 +623,15 @@ class HelicoGui(Node):
 
     def selected_trajectory(self):
 
-        selection = (
-            self.trajectory_list
-            .curselection()
-        )
+        selection = self.trajectory_list.curselection()
 
         if not selection:
 
-            self.status_var.set(
-                "Select a saved trajectory first."
-            )
+            self.status_var.set("Select a saved trajectory first.")
 
             return None
 
-        return (
-            self.trajectory_list
-            .get(selection[0])
-        )
-
+        return self.trajectory_list.get(selection[0])
 
     # =============================================================
     # GO TO START
@@ -763,48 +639,29 @@ class HelicoGui(Node):
 
     def go_to_start(self):
 
-        name = (
-            self.selected_trajectory()
-        )
+        name = self.selected_trajectory()
 
         if name is None:
             return
 
-        if not (
-            self.go_to_start_client
-            .server_is_ready()
-        ):
+        if not (self.go_to_start_client.server_is_ready()):
 
-            self.status_var.set(
-                "Go-to-start server is not running."
-            )
+            self.status_var.set("Go-to-start server is not running.")
 
             return
 
-        goal = (
-            GoToTrajectoryStart.Goal()
-        )
+        goal = GoToTrajectoryStart.Goal()
 
         goal.trajectory_name = name
 
-        self.status_var.set(
-            f"Going to start of '{name}'..."
+        self.status_var.set(f"Going to start of '{name}'...")
+
+        future = self.go_to_start_client.send_goal_async(
+            goal,
+            feedback_callback=(self.motion_feedback),
         )
 
-        future = (
-            self.go_to_start_client
-            .send_goal_async(
-                goal,
-                feedback_callback=(
-                    self.motion_feedback
-                ),
-            )
-        )
-
-        future.add_done_callback(
-            self.motion_goal_response
-        )
-
+        future.add_done_callback(self.motion_goal_response)
 
     # =============================================================
     # EXECUTE
@@ -812,60 +669,36 @@ class HelicoGui(Node):
 
     def execute_trajectory(self):
 
-        name = (
-            self.selected_trajectory()
-        )
+        name = self.selected_trajectory()
 
         if name is None:
             return
 
-        if not (
-            self.execute_client
-            .server_is_ready()
-        ):
+        if not (self.execute_client.server_is_ready()):
 
-            self.status_var.set(
-                "Execution server is not running."
-            )
+            self.status_var.set("Execution server is not running.")
 
             return
 
-        goal = (
-            ExecuteTrajectory.Goal()
-        )
+        goal = ExecuteTrajectory.Goal()
 
         goal.trajectory_name = name
 
-        self.status_var.set(
-            f"Executing '{name}'..."
+        self.status_var.set(f"Executing '{name}'...")
+
+        future = self.execute_client.send_goal_async(
+            goal,
+            feedback_callback=(self.motion_feedback),
         )
 
-        future = (
-            self.execute_client
-            .send_goal_async(
-                goal,
-                feedback_callback=(
-                    self.motion_feedback
-                ),
-            )
-        )
-
-        future.add_done_callback(
-            self.motion_goal_response
-        )
-
+        future.add_done_callback(self.motion_goal_response)
 
     def motion_feedback(
         self,
         feedback_msg,
     ):
 
-        self.status_var.set(
-            feedback_msg
-            .feedback
-            .status
-        )
-
+        self.status_var.set(feedback_msg.feedback.status)
 
     def motion_goal_response(
         self,
@@ -876,35 +709,22 @@ class HelicoGui(Node):
 
         if not goal_handle.accepted:
 
-            self.status_var.set(
-                "Motion goal rejected."
-            )
+            self.status_var.set("Motion goal rejected.")
 
             return
 
-        result_future = (
-            goal_handle
-            .get_result_async()
-        )
+        result_future = goal_handle.get_result_async()
 
-        result_future.add_done_callback(
-            self.motion_result
-        )
-
+        result_future.add_done_callback(self.motion_result)
 
     def motion_result(
         self,
         future,
     ):
 
-        result = (
-            future.result()
-            .result
-        )
+        result = future.result().result
 
-        self.status_var.set(
-            result.message
-        )
+        self.status_var.set(result.message)
 
 
 def main():
@@ -913,9 +733,7 @@ def main():
 
     root = tk.Tk()
 
-    node = HelicoGui(
-        root
-    )
+    node = HelicoGui(root)
 
     try:
 

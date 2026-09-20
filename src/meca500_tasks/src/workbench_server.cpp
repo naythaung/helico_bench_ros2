@@ -18,7 +18,6 @@
 #include "meca500_interfaces/srv/inspect_trajectory.hpp"
 #include "meca500_interfaces/srv/list_trajectories.hpp"
 
-
 class WorkbenchServer : public rclcpp::Node
 {
 public:
@@ -63,7 +62,6 @@ public:
                     std::placeholders::_1,
                     std::placeholders::_2));
 
-
         // -----------------------------------------------------
         // TRAJECTORY SERVICES
         // -----------------------------------------------------
@@ -98,7 +96,6 @@ public:
                     std::placeholders::_1,
                     std::placeholders::_2));
 
-
         // -----------------------------------------------------
         // JOINT STATE SUBSCRIPTION
         // -----------------------------------------------------
@@ -115,12 +112,10 @@ public:
                     have_joint_state_ = true;
                 });
 
-
         RCLCPP_INFO(
             this->get_logger(),
             "Meca500 workbench server ready.");
     }
-
 
 private:
     // =========================================================
@@ -129,22 +124,13 @@ private:
 
     std::filesystem::path posesPath() const
     {
-        return std::filesystem::current_path()
-               / "src"
-               / "meca500_tasks"
-               / "config"
-               / "poses.yaml";
+        return std::filesystem::current_path() / "src" / "meca500_tasks" / "config" / "poses.yaml";
     }
-
 
     std::filesystem::path trajectoriesDirectory() const
     {
-        return std::filesystem::current_path()
-               / "src"
-               / "meca500_tasks"
-               / "trajectories";
+        return std::filesystem::current_path() / "src" / "meca500_tasks" / "trajectories";
     }
-
 
     // =========================================================
     // LIST POSES
@@ -154,11 +140,13 @@ private:
         const std::shared_ptr<
             meca500_interfaces::srv::ListPoses::Request>,
         std::shared_ptr<
-            meca500_interfaces::srv::ListPoses::Response> response)
+            meca500_interfaces::srv::ListPoses::Response>
+            response)
     {
         try
         {
             response->names.clear();
+            response->types.clear();
 
             const auto poses_path =
                 posesPath();
@@ -180,11 +168,18 @@ private:
             {
                 response->names.push_back(
                     pose.first.as<std::string>());
-            }
 
-            std::sort(
-                response->names.begin(),
-                response->names.end());
+                if (pose.second["type"])
+                {
+                    response->types.push_back(
+                        pose.second["type"].as<std::string>());
+                }
+                else
+                {
+                    response->types.push_back(
+                        "unknown");
+                }
+            }
 
             RCLCPP_INFO(
                 this->get_logger(),
@@ -200,16 +195,17 @@ private:
         }
     }
 
-
     // =========================================================
     // CAPTURE CURRENT POSE
     // =========================================================
 
     void handleCapturePose(
         const std::shared_ptr<
-            meca500_interfaces::srv::CapturePose::Request> request,
+            meca500_interfaces::srv::CapturePose::Request>
+            request,
         std::shared_ptr<
-            meca500_interfaces::srv::CapturePose::Response> response)
+            meca500_interfaces::srv::CapturePose::Response>
+            response)
     {
         try
         {
@@ -247,8 +243,7 @@ private:
                 "meca_axis_3",
                 "meca_axis_4",
                 "meca_axis_5",
-                "meca_axis_6"
-            };
+                "meca_axis_6"};
 
             std::vector<double> joint_values;
 
@@ -357,16 +352,17 @@ private:
         }
     }
 
-
     // =========================================================
     // DELETE POSE
     // =========================================================
 
     void handleDeletePose(
         const std::shared_ptr<
-            meca500_interfaces::srv::DeletePose::Request> request,
+            meca500_interfaces::srv::DeletePose::Request>
+            request,
         std::shared_ptr<
-            meca500_interfaces::srv::DeletePose::Response> response)
+            meca500_interfaces::srv::DeletePose::Response>
+            response)
     {
         try
         {
@@ -449,7 +445,6 @@ private:
         }
     }
 
-
     // =========================================================
     // LIST TRAJECTORIES
     // =========================================================
@@ -458,7 +453,8 @@ private:
         const std::shared_ptr<
             meca500_interfaces::srv::ListTrajectories::Request>,
         std::shared_ptr<
-            meca500_interfaces::srv::ListTrajectories::Response> response)
+            meca500_interfaces::srv::ListTrajectories::Response>
+            response)
     {
         try
         {
@@ -508,16 +504,17 @@ private:
         }
     }
 
-
     // =========================================================
     // INSPECT TRAJECTORY
     // =========================================================
 
     void handleInspectTrajectory(
         const std::shared_ptr<
-            meca500_interfaces::srv::InspectTrajectory::Request> request,
+            meca500_interfaces::srv::InspectTrajectory::Request>
+            request,
         std::shared_ptr<
-            meca500_interfaces::srv::InspectTrajectory::Response> response)
+            meca500_interfaces::srv::InspectTrajectory::Response>
+            response)
     {
         try
         {
@@ -531,8 +528,7 @@ private:
             }
 
             const std::filesystem::path filepath =
-                trajectoriesDirectory()
-                / (request->name + ".yaml");
+                trajectoriesDirectory() / (request->name + ".yaml");
 
             if (!std::filesystem::exists(filepath))
             {
@@ -549,7 +545,6 @@ private:
             const YAML::Node root =
                 YAML::LoadFile(
                     filepath.string());
-
 
             // -------------------------------------------------
             // START / TARGET
@@ -568,7 +563,6 @@ private:
                     root["target_pose"]
                         .as<std::string>();
             }
-
 
             // -------------------------------------------------
             // PLANNING SETTINGS
@@ -622,7 +616,6 @@ private:
                 }
             }
 
-
             // -------------------------------------------------
             // TRAJECTORY METRICS
             // -------------------------------------------------
@@ -675,7 +668,6 @@ private:
                 }
             }
 
-
             response->success =
                 true;
 
@@ -702,16 +694,17 @@ private:
         }
     }
 
-
     // =========================================================
     // DELETE TRAJECTORY
     // =========================================================
 
     void handleDeleteTrajectory(
         const std::shared_ptr<
-            meca500_interfaces::srv::DeleteTrajectory::Request> request,
+            meca500_interfaces::srv::DeleteTrajectory::Request>
+            request,
         std::shared_ptr<
-            meca500_interfaces::srv::DeleteTrajectory::Response> response)
+            meca500_interfaces::srv::DeleteTrajectory::Response>
+            response)
     {
         try
         {
@@ -725,8 +718,7 @@ private:
             }
 
             const std::filesystem::path filepath =
-                trajectoriesDirectory()
-                / (request->name + ".yaml");
+                trajectoriesDirectory() / (request->name + ".yaml");
 
             if (!std::filesystem::exists(filepath))
             {
@@ -775,7 +767,6 @@ private:
         }
     }
 
-
     // =========================================================
     // DATA STORED BY THIS NODE
     // =========================================================
@@ -786,7 +777,6 @@ private:
     bool have_joint_state_ =
         false;
 
-
     // =========================================================
     // ROS INTERFACES
     // =========================================================
@@ -794,7 +784,6 @@ private:
     rclcpp::Subscription<
         sensor_msgs::msg::JointState>::SharedPtr
         joint_state_subscription_;
-
 
     // Pose services
 
@@ -810,7 +799,6 @@ private:
         meca500_interfaces::srv::DeletePose>::SharedPtr
         delete_pose_service_;
 
-
     // Trajectory services
 
     rclcpp::Service<
@@ -825,7 +813,6 @@ private:
         meca500_interfaces::srv::DeleteTrajectory>::SharedPtr
         delete_trajectory_service_;
 };
-
 
 // =============================================================
 // MAIN
