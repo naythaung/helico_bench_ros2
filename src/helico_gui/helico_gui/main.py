@@ -90,7 +90,7 @@ class HelicoGui(Node):
 
         self.root.after(
             200,
-            self.refresh_all,
+            self.wait_for_backend,
         )
 
         self.root.after(
@@ -388,6 +388,35 @@ class HelicoGui(Node):
     # REFRESH
     # =============================================================
 
+    def wait_for_backend(self):
+
+        poses_ready = (
+            self.list_poses_client.service_is_ready()
+        )
+
+        trajectories_ready = (
+            self.list_trajectories_client.service_is_ready()
+        )
+
+        if poses_ready and trajectories_ready:
+
+            self.status_var.set(
+                "Backend connected."
+            )
+
+            self.refresh_all()
+
+        else:
+
+            self.status_var.set(
+                "Waiting for workbench backend..."
+            )
+
+            self.root.after(
+                500,
+                self.wait_for_backend,
+            )
+    
     def refresh_all(self):
 
         self.refresh_poses()
