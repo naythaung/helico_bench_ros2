@@ -11,7 +11,7 @@
 
 #include "meca500_interfaces/srv/capture_pose.hpp"
 #include "meca500_interfaces/srv/list_poses.hpp"
-
+#include "meca500_interfaces/srv/delete_pose.hpp"
 
 class WorkbenchServer : public rclcpp::Node
 {
@@ -56,11 +56,19 @@ public:
                     std::placeholders::_1,
                     std::placeholders::_2));
 
+        delete_pose_service_ =
+            this->create_service<meca500_interfaces::srv::DeletePose>(
+                "/meca/delete_pose",
+                std::bind(
+                    &WorkbenchServer::handleDeletePose,
+                    this,
+                    std::placeholders::_1,
+                    std::placeholders::_2));
+
         RCLCPP_INFO(
             this->get_logger(),
             "Meca500 workbench server ready.");
     }
-
 
 private:
     // ---------------------------------------------------------
@@ -71,14 +79,11 @@ private:
         const std::shared_ptr<
             meca500_interfaces::srv::ListPoses::Request>,
         std::shared_ptr<
-            meca500_interfaces::srv::ListPoses::Response> response)
+            meca500_interfaces::srv::ListPoses::Response>
+            response)
     {
         const std::filesystem::path poses_path =
-            std::filesystem::current_path()
-            / "src"
-            / "meca500_tasks"
-            / "config"
-            / "poses.yaml";
+            std::filesystem::current_path() / "src" / "meca500_tasks" / "config" / "poses.yaml";
 
         try
         {
@@ -116,16 +121,17 @@ private:
         }
     }
 
-
     // ---------------------------------------------------------
     // CAPTURE CURRENT POSE
     // ---------------------------------------------------------
 
     void handleCapturePose(
         const std::shared_ptr<
-            meca500_interfaces::srv::CapturePose::Request> request,
+            meca500_interfaces::srv::CapturePose::Request>
+            request,
         std::shared_ptr<
-            meca500_interfaces::srv::CapturePose::Response> response)
+            meca500_interfaces::srv::CapturePose::Response>
+            response)
     {
         try
         {
@@ -167,8 +173,7 @@ private:
                 "meca_axis_3",
                 "meca_axis_4",
                 "meca_axis_5",
-                "meca_axis_6"
-            };
+                "meca_axis_6"};
 
             std::vector<double> joint_values;
 
@@ -214,11 +219,7 @@ private:
 
             // Location of our pose library
             const std::filesystem::path poses_path =
-                std::filesystem::current_path()
-                / "src"
-                / "meca500_tasks"
-                / "config"
-                / "poses.yaml";
+                std::filesystem::current_path() / "src" / "meca500_tasks" / "config" / "poses.yaml";
 
             YAML::Node poses;
 
@@ -282,6 +283,87 @@ private:
         }
     }
 
+    void handleDeletePose(
+        const std::shared_ptr<
+            meca500_interfaces::srv::DeletePose::Request>
+            request,
+        std::shared_ptr<
+            meca500_interfaces::srv::DeletePose::Response>
+            response)
+    {
+        try
+        {
+            if (request->name.empty())
+            {
+                response->success = false;
+                response->message =
+                    "Pose name cannot be empty.";
+                return;
+            }
+
+            const std::filesystem::path poses_path =
+                std::filesystem::current_path() / "src" / "meca500_tasks" / "config" / "poses.yaml";
+
+            if (!std::filesystem::exists(poses_path))
+            {
+                response->success = false;
+                response->message =
+                    "Pose library does not exist.";
+                return;
+            }
+
+            YAML::Node poses =
+                YAML::LoadFile(
+                    poses_path.string());
+
+            if (!poses[request->name])
+            {
+                response->success = false;
+                response->message =
+                    "Pose '" +
+                    request->name +
+                    "' does not exist.";
+                return;
+            }
+
+            poses.remove(request->name);
+
+            std::ofstream file(poses_path);
+
+            if (!file.is_open())
+            {
+                response->success = false;
+                response->message =
+                    "Could not open poses.yaml for writing.";
+                return;
+            }
+
+            file << poses;
+            file.close();
+
+            response->success = true;
+
+            response->message =
+                "Pose '" +
+                request->name +
+                "' deleted.";
+
+            RCLCPP_INFO(
+                this->get_logger(),
+                "Deleted pose '%s'.",
+                request->name.c_str());
+        }
+        catch (const std::exception &e)
+        {
+            response->success = false;
+            response->message = e.what();
+
+            RCLCPP_ERROR(
+                this->get_logger(),
+                "Failed to delete pose: %s",
+                e.what());
+        }
+    }
 
     // ---------------------------------------------------------
     // DATA STORED BY THIS NODE
@@ -290,7 +372,6 @@ private:
     sensor_msgs::msg::JointState latest_joint_state_;
 
     bool have_joint_state_ = false;
-
 
     // ---------------------------------------------------------
     // ROS INTERFACES
@@ -307,8 +388,11 @@ private:
     rclcpp::Service<
         meca500_interfaces::srv::CapturePose>::SharedPtr
         capture_pose_service_;
-};
 
+    rclcpp::Service<
+        meca500_interfaces::srv::DeletePose>::SharedPtr
+        delete_pose_service_;
+};
 
 // ---------------------------------------------------------
 // MAIN
