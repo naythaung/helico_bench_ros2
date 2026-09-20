@@ -8,6 +8,7 @@ endif()
 # Dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_action REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
@@ -71,6 +72,30 @@ add_executable(workbench_server
   src/workbench_server.cpp
 )
 
+# Plan trajectory action server
+add_executable(plan_trajectory_server
+  src/plan_trajectory_server.cpp
+  src/trajectory_planner.cpp
+  src/trajectory_evaluator.cpp
+)
+
+target_compile_features(plan_trajectory_server PUBLIC cxx_std_17)
+
+target_include_directories(plan_trajectory_server PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
+target_link_libraries(plan_trajectory_server PRIVATE
+  rclcpp::rclcpp
+  rclcpp_action::rclcpp_action
+  ${geometry_msgs_TARGETS}
+  ${trajectory_msgs_TARGETS}
+  ${moveit_ros_planning_interface_TARGETS}
+  ${meca500_interfaces_TARGETS}
+  yaml-cpp
+)
+
 target_compile_features(workbench_server PUBLIC cxx_std_17)
 
 target_include_directories(workbench_server PUBLIC
@@ -104,6 +129,7 @@ install(TARGETS
   replay_trajectory
   go_to_trajectory_start
   workbench_server
+  plan_trajectory_server
   DESTINATION lib/${PROJECT_NAME}
 )
 
