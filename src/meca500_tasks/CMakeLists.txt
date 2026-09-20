@@ -12,6 +12,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
 find_package(meca500_interfaces REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -80,6 +81,7 @@ target_include_directories(workbench_server PUBLIC
 target_link_libraries(workbench_server PRIVATE
   rclcpp::rclcpp
   ${meca500_interfaces_TARGETS}
+  ${sensor_msgs_TARGETS}
   yaml-cpp
 )
 
