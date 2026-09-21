@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox, simpledialog
 
 import rclpy
 from rclpy.node import Node
@@ -7,8 +7,11 @@ from rclpy.action import ActionClient
 
 from meca500_interfaces.srv import (
     ListPoses,
+    CapturePose,
+    DeletePose,
     ListTrajectories,
     InspectTrajectory,
+    DeleteTrajectory,
 )
 
 from meca500_interfaces.action import (
@@ -28,6 +31,11 @@ class HelicoGui(Node):
         self.root.title("Meca500 Workbench")
 
         self.root.geometry("900x1100")
+        
+        self.root.minsize(
+            850,
+            800,
+        )       
 
         # ---------------------------------------------------------
         # ROS SERVICE CLIENTS
@@ -47,6 +55,21 @@ class HelicoGui(Node):
             InspectTrajectory,
             "/meca/inspect_trajectory",
         )
+        
+        self.capture_pose_client = self.create_client(
+            CapturePose,
+            "/meca/capture_pose",
+        )
+
+        self.delete_pose_client = self.create_client(
+            DeletePose,
+            "/meca/delete_pose",
+        )
+
+        self.delete_trajectory_client = self.create_client(
+            DeleteTrajectory,
+            "/meca/delete_trajectory",
+)
 
         # ---------------------------------------------------------
         # ROS ACTION CLIENTS
@@ -75,6 +98,7 @@ class HelicoGui(Node):
         # ---------------------------------------------------------
 
         self.build_gui()
+
 
         # ---------------------------------------------------------
         # START ROS / GUI LOOP
@@ -248,6 +272,53 @@ class HelicoGui(Node):
             pady=15,
         )
 
+        pose_frame = ttk.LabelFrame(
+            main,
+            text="Pose Library",
+            padding=10,
+        )
+
+        pose_frame.pack(
+            fill="x",
+            pady=(0, 15),
+        )
+
+        self.pose_list = tk.Listbox(
+            pose_frame,
+            height=5,
+        )
+
+        self.pose_list.pack(
+            fill="x",
+            expand=True,
+        )
+
+        pose_button_frame = ttk.Frame(
+            pose_frame,
+        )
+
+        pose_button_frame.pack(
+            pady=(10, 0),
+        )
+
+        ttk.Button(
+            pose_button_frame,
+            text="Capture Current Pose",
+            command=self.capture_pose,
+        ).pack(
+            side="left",
+            padx=5,
+        )
+
+        ttk.Button(
+            pose_button_frame,
+            text="Delete Pose",
+            command=self.delete_pose,
+        ).pack(
+            side="left",
+            padx=5,
+        )
+
         # ---------------------------------------------------------
         # STATUS
         # ---------------------------------------------------------
@@ -356,6 +427,17 @@ class HelicoGui(Node):
             padx=5,
         )
         
+        self.delete_trajectory_button = ttk.Button(
+            button_frame,
+            text="Delete Trajectory",
+            command=self.delete_trajectory,
+        )
+
+        self.delete_trajectory_button.pack(
+            side="left",
+            padx=5,
+        )
+        
         details_frame = ttk.LabelFrame(
             main,
             text="Trajectory Details",
@@ -450,6 +532,17 @@ class HelicoGui(Node):
             response = future.result()
 
             poses = list(response.names)
+            
+            self.pose_list.delete(
+                0,
+                tk.END,
+            )
+
+            for name in poses:
+                self.pose_list.insert(
+                    tk.END,
+                    name,
+                )
 
             pose_types = list(response.types)
 
@@ -639,6 +732,127 @@ class HelicoGui(Node):
 
             self.status_var.set("Planning failed: " + result.message)
 
+    def capture_pose(self):
+
+        name = simpledialog.askstring(
+            "Capture Pose",
+            "Name for the current robot pose:",
+            parent=self.root,
+        )
+
+        if not name:
+            return
+
+        if not self.capture_pose_client.service_is_ready():
+
+            self.status_var.set(
+                "Capture pose service is not ready."
+            )
+
+            return
+
+        request = CapturePose.Request()
+        request.name = name.strip()
+
+        future = self.capture_pose_client.call_async(
+            request
+        )
+
+        future.add_done_callback(
+            self.capture_pose_result
+        )
+
+
+    def capture_pose_result(
+        self,
+        future,
+    ):
+
+        try:
+
+            response = future.result()
+
+            self.status_var.set(
+                response.message
+            )
+
+            if response.success:
+                self.refresh_poses()
+
+        except Exception as error:
+
+            self.status_var.set(
+                f"Capture pose failed: {error}"
+            )
+
+
+    def delete_pose(self):
+
+        selection = self.pose_list.curselection()
+
+        if not selection:
+
+            self.status_var.set(
+                "Select a pose to delete."
+            )
+
+            return
+
+        name = self.pose_list.get(
+            selection[0]
+        )
+
+        confirmed = messagebox.askyesno(
+            "Delete Pose",
+            f"Delete pose '{name}'?",
+            parent=self.root,
+        )
+
+        if not confirmed:
+            return
+
+        if not self.delete_pose_client.service_is_ready():
+
+            self.status_var.set(
+                "Delete pose service is not ready."
+            )
+
+            return
+
+        request = DeletePose.Request()
+        request.name = name
+
+        future = self.delete_pose_client.call_async(
+            request
+        )
+
+        future.add_done_callback(
+            self.delete_pose_result
+        )
+
+
+    def delete_pose_result(
+        self,
+        future,
+    ):
+
+        try:
+
+            response = future.result()
+
+            self.status_var.set(
+                response.message
+            )
+
+            if response.success:
+                self.refresh_poses()
+
+        except Exception as error:
+
+            self.status_var.set(
+                f"Delete pose failed: {error}"
+            )
+
     # =============================================================
     # SELECTED TRAJECTORY
     # =============================================================
@@ -755,6 +969,69 @@ class HelicoGui(Node):
                 f"Inspection failed: {error}"
             )
     
+    def delete_trajectory(self):
+
+        name = self.selected_trajectory()
+
+        if name is None:
+            return
+
+        confirmed = messagebox.askyesno(
+            "Delete Trajectory",
+            f"Delete trajectory '{name}'?",
+            parent=self.root,
+        )
+
+        if not confirmed:
+            return
+
+        if not self.delete_trajectory_client.service_is_ready():
+
+            self.status_var.set(
+                "Delete trajectory service is not ready."
+            )
+
+            return
+
+        request = DeleteTrajectory.Request()
+        request.name = name
+
+        future = self.delete_trajectory_client.call_async(
+            request
+        )
+
+        future.add_done_callback(
+            self.delete_trajectory_result
+        )
+
+
+    def delete_trajectory_result(
+        self,
+        future,
+    ):
+
+        try:
+
+            response = future.result()
+
+            self.status_var.set(
+                response.message
+            )
+
+            if response.success:
+
+                self.trajectory_details_var.set(
+                    "Select a saved trajectory."
+                )
+
+                self.refresh_trajectories()
+
+        except Exception as error:
+
+            self.status_var.set(
+                f"Delete trajectory failed: {error}"
+            )
+        
     # =============================================================
     # GO TO START
     # =============================================================
@@ -794,6 +1071,15 @@ class HelicoGui(Node):
         name = self.selected_trajectory()
 
         if name is None:
+            return
+        
+        confirmed = messagebox.askyesno(
+                    "Execute Trajectory",
+                    f"Execute trajectory '{name}'?",
+                    parent=self.root,
+                )
+        
+        if not confirmed:
             return
 
         if not (self.execute_client.server_is_ready()):
