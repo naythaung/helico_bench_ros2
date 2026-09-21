@@ -303,7 +303,7 @@ class HelicoGui(Node):
 
         ttk.Button(
             pose_button_frame,
-            text="Capture Current Pose",
+            text="Capture Current Robot Pose",
             command=self.capture_pose,
         ).pack(
             side="left",

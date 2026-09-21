@@ -137,7 +137,7 @@ namespace meca500_tasks
         // Clearance sampling is used for ranking / diagnostics.
         // MoveIt remains responsible for full collision checking
         // during planning.
-        constexpr std::size_t sample_stride = 5;
+        constexpr std::size_t sample_stride = 10;
 
         auto evaluate_point =
             [&](const trajectory_msgs::msg::JointTrajectoryPoint &point)
