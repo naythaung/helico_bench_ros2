@@ -177,6 +177,14 @@ class HelicoWindow(QMainWindow):
 
         self.start_pose_box = QComboBox()
         self.target_pose_box = QComboBox()
+        
+        self.start_pose_box.currentTextChanged.connect(
+            self.update_default_trajectory_name
+        )
+
+        self.target_pose_box.currentTextChanged.connect(
+            self.update_default_trajectory_name
+        )
 
         self.trajectory_name_entry = QLineEdit(
             "gui_trajectory"
@@ -454,6 +462,16 @@ class HelicoWindow(QMainWindow):
 
         layout.addStretch()
 
+    def update_default_trajectory_name(self):
+
+        start = self.start_pose_box.currentText().strip()
+        target = self.target_pose_box.currentText().strip()
+
+        if start and target:
+            self.trajectory_name_entry.setText(
+                f"{start}_TO_{target}"
+            )
+    
     # ============================================================
     # DIAGNOSTICS TAB
     # ============================================================
