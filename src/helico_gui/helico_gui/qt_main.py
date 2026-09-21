@@ -191,8 +191,19 @@ class HelicoWindow(QMainWindow):
         )
 
         self.candidate_spinbox = QSpinBox()
-        self.candidate_spinbox.setRange(1, 20)
+        self.candidate_spinbox.setRange(1, 50)
         self.candidate_spinbox.setValue(3)
+        
+        self.speed_spinbox = QSpinBox()
+        self.speed_spinbox.setRange(1, 100)
+        self.speed_spinbox.setValue(20)
+        self.speed_spinbox.setSuffix(" %")
+
+        self.clearance_spinbox = QSpinBox()
+        self.clearance_spinbox.setRange(0, 200)
+        self.clearance_spinbox.setValue(10)
+        self.clearance_spinbox.setSuffix(" mm")
+        
 
         planning_form.addRow(
             "Start pose",
@@ -232,6 +243,16 @@ class HelicoWindow(QMainWindow):
         planning_form.addRow(
             "Progress",
             self.progress,
+        )
+        
+        planning_form.addRow(
+            "Speed",
+            self.speed_spinbox,
+        )
+
+        planning_form.addRow(
+            "Minimum clearance",
+            self.clearance_spinbox,
         )
 
         left.addWidget(planning_box)
@@ -744,7 +765,18 @@ class HelicoWindow(QMainWindow):
             self.candidate_spinbox.value()
         )
 
-        goal.minimum_required_clearance = 0.0
+        speed = (
+            self.speed_spinbox.value()
+            / 100.0
+        )
+
+        goal.velocity_scaling = speed
+        goal.acceleration_scaling = speed
+
+        goal.minimum_required_clearance = (
+            self.clearance_spinbox.value()
+            / 1000.0
+        )
 
         goal.weight_clearance = 0.4
         goal.weight_smoothness = 0.3

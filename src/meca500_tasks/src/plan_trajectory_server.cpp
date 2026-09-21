@@ -8,7 +8,6 @@
 #include "meca500_interfaces/action/plan_trajectory.hpp"
 #include "meca500_tasks/trajectory_planner.hpp"
 
-
 class PlanTrajectoryServer : public rclcpp::Node
 {
 public:
@@ -17,7 +16,6 @@ public:
 
     using GoalHandlePlanTrajectory =
         rclcpp_action::ServerGoalHandle<PlanTrajectory>;
-
 
     PlanTrajectoryServer()
         : Node("meca500_plan_trajectory_server")
@@ -48,7 +46,6 @@ public:
             "Plan trajectory action server ready.");
     }
 
-
 private:
     rclcpp_action::GoalResponse handleGoal(
         const rclcpp_action::GoalUUID &,
@@ -74,7 +71,6 @@ private:
         return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
     }
 
-
     rclcpp_action::CancelResponse handleCancel(
         const std::shared_ptr<
             GoalHandlePlanTrajectory>)
@@ -86,10 +82,10 @@ private:
         return rclcpp_action::CancelResponse::ACCEPT;
     }
 
-
     void handleAccepted(
         const std::shared_ptr<
-            GoalHandlePlanTrajectory> goal_handle)
+            GoalHandlePlanTrajectory>
+            goal_handle)
     {
         std::thread(
             [this, goal_handle]()
@@ -99,10 +95,10 @@ private:
             .detach();
     }
 
-
     void execute(
         const std::shared_ptr<
-            GoalHandlePlanTrajectory> goal_handle)
+            GoalHandlePlanTrajectory>
+            goal_handle)
     {
         const auto goal =
             goal_handle->get_goal();
@@ -110,7 +106,6 @@ private:
         auto result =
             std::make_shared<
                 PlanTrajectory::Result>();
-
 
         meca500_tasks::PlanningRequest request;
 
@@ -125,6 +120,12 @@ private:
 
         request.num_candidates =
             goal->num_candidates;
+
+        request.velocity_scaling =
+            goal->velocity_scaling;
+
+        request.acceleration_scaling =
+            goal->acceleration_scaling;
 
         request.minimum_required_clearance =
             goal->minimum_required_clearance;
@@ -141,37 +142,34 @@ private:
         request.weight_duration =
             goal->weight_duration;
 
-
         auto feedback_callback =
             [goal_handle](
                 int current_candidate,
                 int total_candidates,
                 const std::string &status)
-            {
-                auto feedback =
-                    std::make_shared<
-                        PlanTrajectory::Feedback>();
+        {
+            auto feedback =
+                std::make_shared<
+                    PlanTrajectory::Feedback>();
 
-                feedback->current_candidate =
-                    current_candidate;
+            feedback->current_candidate =
+                current_candidate;
 
-                feedback->total_candidates =
-                    total_candidates;
+            feedback->total_candidates =
+                total_candidates;
 
-                feedback->status =
-                    status;
+            feedback->status =
+                status;
 
-                goal_handle->publish_feedback(
-                    feedback);
-            };
-
+            goal_handle->publish_feedback(
+                feedback);
+        };
 
         const auto planning_result =
             meca500_tasks::planTrajectory(
                 shared_from_this(),
                 request,
                 feedback_callback);
-
 
         result->success =
             planning_result.success;
@@ -200,7 +198,6 @@ private:
         result->duration =
             planning_result.metrics.duration;
 
-
         if (planning_result.success)
         {
             goal_handle->succeed(
@@ -213,12 +210,10 @@ private:
         }
     }
 
-
     rclcpp_action::Server<
         PlanTrajectory>::SharedPtr
         action_server_;
 };
-
 
 int main(int argc, char **argv)
 {

@@ -4,6 +4,9 @@ string trajectory_name
 
 int32 num_candidates
 
+float64 velocity_scaling
+float64 acceleration_scaling
+
 float64 minimum_required_clearance
 
 float64 weight_clearance
