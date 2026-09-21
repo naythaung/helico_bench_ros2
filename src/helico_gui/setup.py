@@ -39,6 +39,7 @@ setup(
     entry_points={
         "console_scripts": [
             "helico_gui = helico_gui.main:main",
+	        "helico_qt = helico_gui.qt_main:main",
         ],
     },
 )
