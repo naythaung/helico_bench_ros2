@@ -737,6 +737,10 @@ namespace meca500_tasks
 
                     request.num_candidates,
 
+                    request.velocity_scaling,
+                    request.acceleration_scaling,
+                    "RRTConnectkConfigDefault",
+
                     request.minimum_required_clearance,
 
                     request.weight_clearance,

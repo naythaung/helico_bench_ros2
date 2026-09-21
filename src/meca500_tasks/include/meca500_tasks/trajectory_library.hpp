@@ -22,6 +22,9 @@ namespace meca500_tasks
          const std::string &start_pose_name,
          const std::string &target_pose_name,
          int num_candidates,
+         double velocity_scaling,
+         double acceleration_scaling,
+         const std::string &planner_id,
          double minimum_required_clearance,
          double weight_clearance,
          double weight_smoothness,
@@ -59,6 +62,15 @@ namespace meca500_tasks
 
           file << "  num_candidates: "
                << num_candidates << "\n";
+
+          file << "  velocity_scaling: "
+               << velocity_scaling << "\n";
+
+          file << "  acceleration_scaling: "
+               << acceleration_scaling << "\n";
+
+          file << "  planner_id: "
+               << planner_id << "\n";
 
           file << "  minimum_required_clearance: "
                << minimum_required_clearance << "\n";

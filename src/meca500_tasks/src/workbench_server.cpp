@@ -580,6 +580,24 @@ private:
                             .as<int>();
                 }
 
+                if (planning["velocity_scaling"])
+                {
+                    response->velocity_scaling =
+                        planning["velocity_scaling"].as<double>();
+                }
+
+                if (planning["acceleration_scaling"])
+                {
+                    response->acceleration_scaling =
+                        planning["acceleration_scaling"].as<double>();
+                }
+
+                if (planning["planner_id"])
+                {
+                    response->planner_id =
+                        planning["planner_id"].as<std::string>();
+                }
+
                 if (planning["minimum_required_clearance"])
                 {
                     response->minimum_required_clearance =

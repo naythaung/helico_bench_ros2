@@ -8,6 +8,10 @@ string target_pose
 
 int32 num_candidates
 
+float64 velocity_scaling
+float64 acceleration_scaling
+string planner_id
+
 float64 minimum_required_clearance
 
 float64 weight_clearance
@@ -21,4 +25,3 @@ string closest_object_b
 float64 smoothness
 float64 path_length
 float64 duration
-
