@@ -1,13 +1,13 @@
 <?xml version="1.0"?>
 <package format="3">
 
-  <name>helico_gui</name>
+  <name>helico_sensors</name>
   <version>0.0.0</version>
 
-  <description>Meca500 Helico workbench GUI</description>
+  <description>Helico bench sensor nodes</description>
 
-  <maintainer email="naythanaung@hotmail.com">
-    Naythan Aung
+  <maintainer email="naythan@example.com">
+    Naythan
   </maintainer>
 
   <license>Apache-2.0</license>
@@ -16,7 +16,6 @@
 
   <exec_depend>rclpy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
-  <exec_depend>meca500_interfaces</exec_depend>
 
   <export>
     <build_type>ament_python</build_type>

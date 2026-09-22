@@ -202,9 +202,11 @@ def generate_launch_description():
         output="screen",
         parameters=[
             robot_description,
+            {
+                "publish_frequency": 100.0,
+            },
         ],
     )
-
 
     # =========================================================
     # ros2_control mock system

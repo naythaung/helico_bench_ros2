@@ -62,8 +62,8 @@ def generate_launch_description():
 
     gui = Node(
         package="helico_gui",
-        executable="helico_gui",
-        name="helico_gui",
+        executable="helico_qt",
+        name="helico_qt",
         output="screen",
     )
 

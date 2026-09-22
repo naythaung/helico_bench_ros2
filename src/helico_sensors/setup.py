@@ -1,11 +1,6 @@
-import os
-from glob import glob
-
 from setuptools import find_packages, setup
 
-
-package_name = "helico_gui"
-
+package_name = "helico_sensors"
 
 setup(
     name=package_name,
@@ -20,26 +15,23 @@ setup(
             "share/" + package_name,
             ["package.xml"],
         ),
-        (
-            os.path.join(
-                "share",
-                package_name,
-                "launch",
-            ),
-            glob("launch/*.launch.py"),
-        ),
     ],
     install_requires=[
         "setuptools",
     ],
     zip_safe=True,
-    maintainer="Naythan Aung",
-    maintainer_email="naythanaung@hotmail.com",
-    description="Helico Meca500 workbench GUI",
+    maintainer="naythan",
+    maintainer_email="naythan@example.com",
+    description="Helico bench sensor nodes",
     license="Apache-2.0",
+    tests_require=[
+        "pytest",
+    ],
     entry_points={
         "console_scripts": [
-            "helico_qt = helico_gui.qt_main:main",
+            "fake_sensors = helico_sensors.fake_sensors:main",
+            "serial_bridge = helico_sensors.serial_bridge:main",
+            "actuator_bridge = helico_sensors.actuator_bridge:main",
         ],
     },
 )
