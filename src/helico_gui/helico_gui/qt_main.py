@@ -1,8 +1,10 @@
 import sys
+import time
 
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
+from std_msgs.msg import Float64
 
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import (
@@ -97,6 +99,51 @@ class HelicoRosNode(Node):
             "/meca/execute_trajectory",
         )
 
+        # Continuous sensor streams
+        self.latest_laser = None
+        self.latest_force = None
+        self.latest_pressure = None
+
+        self.last_laser_update = None
+        self.last_force_update = None
+        self.last_pressure_update = None
+
+        self.laser_subscription = self.create_subscription(
+            Float64,
+            "/helico/sensors/laser",
+            self.laser_callback,
+            10,
+        )
+
+        self.force_subscription = self.create_subscription(
+            Float64,
+            "/helico/sensors/force",
+            self.force_callback,
+            10,
+        )
+
+        self.pressure_subscription = self.create_subscription(
+            Float64,
+            "/helico/sensors/pressure",
+            self.pressure_callback,
+            10,
+        )
+
+    def laser_callback(self, msg):
+
+        self.latest_laser = msg.data
+        self.last_laser_update = time.monotonic()
+
+    def force_callback(self, msg):
+
+        self.latest_force = msg.data
+        self.last_force_update = time.monotonic()
+
+    def pressure_callback(self, msg):
+
+        self.latest_pressure = msg.data
+        self.last_pressure_update = time.monotonic()
+
 
 class HelicoWindow(QMainWindow):
 
@@ -129,6 +176,14 @@ class HelicoWindow(QMainWindow):
         self.backend_timer.timeout.connect(self.wait_for_backend)
         self.backend_timer.start(500)
 
+        self.sensor_display_timer = QTimer(self)
+
+        self.sensor_display_timer.timeout.connect(
+            self.update_sensor_display
+        )
+
+        self.sensor_display_timer.start(100)
+
     # ============================================================
     # GUI
     # ============================================================
@@ -145,6 +200,64 @@ class HelicoWindow(QMainWindow):
             "font-size: 26px; font-weight: bold; margin: 10px;"
         )
         outer.addWidget(title)
+
+        # Persistent live sensor display
+        sensor_box = QGroupBox("Live Sensors")
+        sensor_layout = QHBoxLayout(sensor_box)
+
+        self.laser_value_label = QLabel(
+            "Laser: --"
+        )
+
+        self.force_value_label = QLabel(
+            "Force: --"
+        )
+
+        self.pressure_value_label = QLabel(
+            "Pressure: --"
+        )
+
+        self.sensor_stream_status = QLabel(
+            "WAITING"
+        )
+
+        self.laser_value_label.setStyleSheet(
+            "font-size: 16px; font-weight: bold;"
+        )
+
+        self.force_value_label.setStyleSheet(
+            "font-size: 16px; font-weight: bold;"
+        )
+
+        self.pressure_value_label.setStyleSheet(
+            "font-size: 16px; font-weight: bold;"
+        )
+
+        self.sensor_stream_status.setStyleSheet(
+            "font-weight: bold;"
+        )
+
+        sensor_layout.addWidget(
+            self.laser_value_label
+        )
+
+        sensor_layout.addWidget(
+            self.force_value_label
+        )
+
+        sensor_layout.addWidget(
+            self.pressure_value_label
+        )
+
+        sensor_layout.addStretch()
+
+        sensor_layout.addWidget(
+            self.sensor_stream_status
+        )
+
+        outer.addWidget(
+            sensor_box
+        )
 
         self.tabs = QTabWidget()
         outer.addWidget(self.tabs)
@@ -1111,6 +1224,100 @@ class HelicoWindow(QMainWindow):
         if start and target:
             self.trajectory_name_entry.setText(
                 f"{start}_TO_{target}"
+            )
+
+    # ============================================================
+    # LIVE SENSOR DISPLAY
+    # ============================================================
+
+    def sensor_is_recent(
+        self,
+        timestamp,
+        timeout=1.0,
+    ):
+
+        if timestamp is None:
+            return False
+
+        return (
+            time.monotonic() - timestamp
+            <= timeout
+        )
+
+    def update_sensor_display(self):
+
+        laser_recent = self.sensor_is_recent(
+            self.node.last_laser_update
+        )
+
+        force_recent = self.sensor_is_recent(
+            self.node.last_force_update
+        )
+
+        pressure_recent = self.sensor_is_recent(
+            self.node.last_pressure_update
+        )
+
+        if laser_recent:
+
+            self.laser_value_label.setText(
+                f"Laser: {self.node.latest_laser:.2f}"
+            )
+
+        else:
+
+            self.laser_value_label.setText(
+                "Laser: --"
+            )
+
+        if force_recent:
+
+            self.force_value_label.setText(
+                f"Force: {self.node.latest_force:.2f}"
+            )
+
+        else:
+
+            self.force_value_label.setText(
+                "Force: --"
+            )
+
+        if pressure_recent:
+
+            self.pressure_value_label.setText(
+                f"Pressure: {self.node.latest_pressure:.2f}"
+            )
+
+        else:
+
+            self.pressure_value_label.setText(
+                "Pressure: --"
+            )
+
+        active = sum(
+            [
+                laser_recent,
+                force_recent,
+                pressure_recent,
+            ]
+        )
+
+        if active == 3:
+
+            self.sensor_stream_status.setText(
+                "STREAMING"
+            )
+
+        elif active > 0:
+
+            self.sensor_stream_status.setText(
+                f"PARTIAL ({active}/3)"
+            )
+
+        else:
+
+            self.sensor_stream_status.setText(
+                "WAITING"
             )
 
     # ============================================================
