@@ -31,6 +31,7 @@ setup(
         "console_scripts": [
             "fake_sensors = helico_sensors.fake_sensors:main",
             "serial_bridge = helico_sensors.serial_bridge:main",
+            "actuator_bridge = helico_sensors.actuator_bridge:main",
         ],
     },
 )

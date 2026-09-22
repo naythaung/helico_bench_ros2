@@ -161,7 +161,7 @@ class HelicoRosNode(Node):
         self.pressure_subscription = (
             self.create_subscription(
                 Float64,
-                "/helico/sensors/pressure",
+                "/helico/actuator/pressure",
                 self.pressure_callback,
                 10,
             )
@@ -2523,6 +2523,45 @@ class HelicoWindow(QMainWindow):
                 "Sensor ESP32: NO DATA"
             )
 
+        if laser_recent and force_recent:
+            self.sensor_esp32_status.setText(
+                "Sensor ESP32: CONNECTED"
+            )
+        elif laser_recent or force_recent:
+            self.sensor_esp32_status.setText(
+                "Sensor ESP32: PARTIAL DATA"
+            )
+        else:
+            self.sensor_esp32_status.setText(
+                "Sensor ESP32: DISCONNECTED"
+            )
+
+        self.laser_status.setText(
+            "  Laser: STREAMING"
+            if laser_recent
+            else "  Laser: NO DATA"
+        )
+
+        self.force_status.setText(
+            "  Force: STREAMING"
+            if force_recent
+            else "  Force: NO DATA"
+        )
+
+        if pressure_recent:
+            self.actuator_status.setText(
+                "Helico Controller: CONNECTED"
+            )
+            self.pressure_status.setText(
+                "  Pressure: STREAMING"
+            )
+        else:
+            self.actuator_status.setText(
+                "Helico Controller: DISCONNECTED"
+            )
+            self.pressure_status.setText(
+                "  Pressure: NO DATA"
+            )
     # ============================================================
     # DEFAULT TRAJECTORY NAME
     # ============================================================
