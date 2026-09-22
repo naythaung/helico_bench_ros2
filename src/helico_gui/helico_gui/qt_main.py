@@ -46,6 +46,15 @@ from meca500_interfaces.action import (
     ExecuteTrajectory,
 )
 
+from helico_gui.widgets.hardware_status import (
+    HardwareStatusWidget,
+)
+
+from helico_gui.widgets.diagnostics_tab import (
+    DiagnosticsTab,
+)
+
+
 # ================================================================
 # MAIN WINDOW
 # ================================================================
@@ -208,72 +217,15 @@ class HelicoWindow(QMainWindow):
         )
 
         # --------------------------------------------------------
-        # PERMANENT LIVE SENSOR PANEL
+        # PERMANENT HARDWARE STATUS
         # --------------------------------------------------------
 
-        sensor_box = QGroupBox(
-            "Live Sensors"
-        )
-
-        sensor_layout = QHBoxLayout(
-            sensor_box
-        )
-
-        self.laser_value_label = QLabel(
-            "Laser: --"
-        )
-
-        self.force_value_label = QLabel(
-            "Force: --"
-        )
-
-        self.pressure_value_label = QLabel(
-            "Pressure: --"
-        )
-
-        self.sensor_stream_status = QLabel(
-            "WAITING"
-        )
-
-        self.laser_value_label.setStyleSheet(
-            "font-size: 16px; "
-            "font-weight: bold;"
-        )
-
-        self.force_value_label.setStyleSheet(
-            "font-size: 16px; "
-            "font-weight: bold;"
-        )
-
-        self.pressure_value_label.setStyleSheet(
-            "font-size: 16px; "
-            "font-weight: bold;"
-        )
-
-        self.sensor_stream_status.setStyleSheet(
-            "font-weight: bold;"
-        )
-
-        sensor_layout.addWidget(
-            self.laser_value_label
-        )
-
-        sensor_layout.addWidget(
-            self.force_value_label
-        )
-
-        sensor_layout.addWidget(
-            self.pressure_value_label
-        )
-
-        sensor_layout.addStretch()
-
-        sensor_layout.addWidget(
-            self.sensor_stream_status
+        self.hardware_status = (
+            HardwareStatusWidget()
         )
 
         outer.addWidget(
-            sensor_box
+            self.hardware_status
         )
 
         # --------------------------------------------------------
@@ -290,7 +242,7 @@ class HelicoWindow(QMainWindow):
 
         self.configure_tab = QWidget()
 
-        self.diagnostics_tab = QWidget()
+        self.diagnostics_tab = DiagnosticsTab()
 
         self.tabs.addTab(
             self.operate_tab,
@@ -310,8 +262,6 @@ class HelicoWindow(QMainWindow):
         self.build_configure_tab()
 
         self.build_operate_tab()
-
-        self.build_diagnostics_tab()
 
         # --------------------------------------------------------
         # GLOBAL STATUS BAR
@@ -2201,202 +2151,41 @@ class HelicoWindow(QMainWindow):
 
     def update_sensor_display(self):
 
-        laser_recent = (
-            self.sensor_is_recent(
-                self.node.last_laser_update
-            )
+        laser_recent = self.sensor_is_recent(
+            self.node.last_laser_update
         )
 
-        force_recent = (
-            self.sensor_is_recent(
-                self.node.last_force_update
-            )
+        force_recent = self.sensor_is_recent(
+            self.node.last_force_update
         )
 
-        pressure_recent = (
-            self.sensor_is_recent(
-                self.node.last_pressure_update
-            )
+        pressure_recent = self.sensor_is_recent(
+            self.node.last_pressure_update
         )
 
-        # --------------------------------------------------------
-        # LASER
-        # --------------------------------------------------------
+        # ========================================================
+        # PERMANENT HARDWARE DISPLAY
+        # ========================================================
 
-        if laser_recent:
-
-            self.laser_value_label.setText(
-                f"Laser: "
-                f"{self.node.latest_laser:.2f}"
-            )
-
-        else:
-
-            self.laser_value_label.setText(
-                "Laser: --"
-            )
-
-        # --------------------------------------------------------
-        # FORCE
-        # --------------------------------------------------------
-
-        if force_recent:
-
-            self.force_value_label.setText(
-                f"Force: "
-                f"{self.node.latest_force:.2f}"
-            )
-
-        else:
-
-            self.force_value_label.setText(
-                "Force: --"
-            )
-
-        # --------------------------------------------------------
-        # PRESSURE
-        # --------------------------------------------------------
-
-        if pressure_recent:
-
-            self.pressure_value_label.setText(
-                f"Pressure: "
-                f"{self.node.latest_pressure:.2f}"
-            )
-
-        else:
-
-            self.pressure_value_label.setText(
-                "Pressure: --"
-            )
-
-        # --------------------------------------------------------
-        # OVERALL SENSOR STATUS
-        # --------------------------------------------------------
-
-        active = sum(
-            [
-                laser_recent,
-                force_recent,
-                pressure_recent,
-            ]
+        self.hardware_status.update_values(
+            laser=self.node.latest_laser,
+            force=self.node.latest_force,
+            pressure=self.node.latest_pressure,
+            laser_recent=laser_recent,
+            force_recent=force_recent,
+            pressure_recent=pressure_recent,
         )
 
-        if active == 3:
+        # ========================================================
+        # DIAGNOSTICS
+        # ========================================================
 
-            self.sensor_stream_status.setText(
-                "STREAMING"
-            )
-
-        elif active > 0:
-
-            self.sensor_stream_status.setText(
-                f"PARTIAL ({active}/3)"
-            )
-
-        else:
-
-            self.sensor_stream_status.setText(
-                "WAITING"
-            )
-
-        # --------------------------------------------------------
-        # DIAGNOSTICS STATUS
-        # --------------------------------------------------------
-
-        if laser_recent:
-
-            self.laser_status.setText(
-                "Laser stream: STREAMING"
-            )
-
-        else:
-
-            self.laser_status.setText(
-                "Laser stream: NO DATA"
-            )
-
-        if force_recent:
-
-            self.force_status.setText(
-                "Force stream: STREAMING"
-            )
-
-        else:
-
-            self.force_status.setText(
-                "Force stream: NO DATA"
-            )
-
-        if pressure_recent:
-
-            self.pressure_status.setText(
-                "Pressure stream: STREAMING"
-            )
-
-        else:
-
-            self.pressure_status.setText(
-                "Pressure stream: NO DATA"
-            )
-
-        if active == 3:
-
-            self.sensor_esp32_status.setText(
-                "Sensor ESP32: CONNECTED"
-            )
-
-        elif active > 0:
-
-            self.sensor_esp32_status.setText(
-                "Sensor ESP32: PARTIAL DATA"
-            )
-
-        else:
-
-            self.sensor_esp32_status.setText(
-                "Sensor ESP32: NO DATA"
-            )
-
-        if laser_recent and force_recent:
-            self.sensor_esp32_status.setText(
-                "Sensor ESP32: CONNECTED"
-            )
-        elif laser_recent or force_recent:
-            self.sensor_esp32_status.setText(
-                "Sensor ESP32: PARTIAL DATA"
-            )
-        else:
-            self.sensor_esp32_status.setText(
-                "Sensor ESP32: DISCONNECTED"
-            )
-
-        self.laser_status.setText(
-            "  Laser: STREAMING"
-            if laser_recent
-            else "  Laser: NO DATA"
+        self.diagnostics_tab.update_hardware(
+            laser_recent=laser_recent,
+            force_recent=force_recent,
+            pressure_recent=pressure_recent,
         )
-
-        self.force_status.setText(
-            "  Force: STREAMING"
-            if force_recent
-            else "  Force: NO DATA"
-        )
-
-        if pressure_recent:
-            self.actuator_status.setText(
-                "Helico Controller: CONNECTED"
-            )
-            self.pressure_status.setText(
-                "  Pressure: STREAMING"
-            )
-        else:
-            self.actuator_status.setText(
-                "Helico Controller: DISCONNECTED"
-            )
-            self.pressure_status.setText(
-                "  Pressure: NO DATA"
-            )
+    
     # ============================================================
     # DEFAULT TRAJECTORY NAME
     # ============================================================
@@ -2419,92 +2208,7 @@ class HelicoWindow(QMainWindow):
 
             self.trajectory_name_entry.setText(
                 f"{start}_TO_{target}"
-            )
-
-    # ============================================================
-    # DIAGNOSTICS TAB
-    # ============================================================
-
-    def build_diagnostics_tab(self):
-
-            layout = QVBoxLayout(
-                self.diagnostics_tab
-            )
-
-            heading = QLabel(
-                "System Diagnostics"
-            )
-
-            heading.setStyleSheet(
-                "font-size: 20px; "
-                "font-weight: bold;"
-            )
-
-            layout.addWidget(
-                heading
-            )
-
-            diagnostics_box = QGroupBox(
-                "System Status"
-            )
-
-            diagnostics_layout = QVBoxLayout(
-                diagnostics_box
-            )
-
-            self.backend_status = QLabel(
-                "Workbench Backend: CHECKING"
-            )
-
-            self.sensor_esp32_status = QLabel(
-                "Sensor ESP32: WAITING"
-            )
-
-            self.laser_status = QLabel(
-                "Laser stream: WAITING"
-            )
-
-            self.force_status = QLabel(
-                "Force stream: WAITING"
-            )
-
-            self.pressure_status = QLabel(
-                "Pressure stream: WAITING"
-            )
-
-            self.actuator_status = QLabel(
-                "Actuator ESP32: NOT CONNECTED"
-            )
-
-            diagnostics_layout.addWidget(
-                self.backend_status
-            )
-
-            diagnostics_layout.addWidget(
-                self.sensor_esp32_status
-            )
-
-            diagnostics_layout.addWidget(
-                self.laser_status
-            )
-
-            diagnostics_layout.addWidget(
-                self.force_status
-            )
-
-            diagnostics_layout.addWidget(
-                self.pressure_status
-            )
-
-            diagnostics_layout.addWidget(
-                self.actuator_status
-            )
-
-            layout.addWidget(
-                diagnostics_box
-            )
-
-            layout.addStretch()    
+            )  
             
     # ============================================================
     # ROS LOOP
@@ -2539,8 +2243,8 @@ class HelicoWindow(QMainWindow):
 
             self.backend_timer.stop()
 
-            self.backend_status.setText(
-                "Workbench Backend: CONNECTED"
+            self.diagnostics_tab.set_backend_connected(
+                True
             )
 
             self.set_status(
@@ -2551,8 +2255,8 @@ class HelicoWindow(QMainWindow):
 
         else:
 
-            self.backend_status.setText(
-                "Workbench Backend: WAITING"
+            self.diagnostics_tab.set_backend_connected(
+                False
             )
 
             self.set_status(
