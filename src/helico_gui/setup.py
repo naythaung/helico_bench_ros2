@@ -1,15 +1,16 @@
 import os
 from glob import glob
-from setuptools import setup
+
+from setuptools import find_packages, setup
+
 
 package_name = "helico_gui"
+
 
 setup(
     name=package_name,
     version="0.0.0",
-    packages=[
-        package_name,
-    ],
+    packages=find_packages(exclude=["test"]),
     data_files=[
         (
             "share/ament_index/resource_index/packages",
@@ -38,8 +39,7 @@ setup(
     license="Apache-2.0",
     entry_points={
         "console_scripts": [
-            "helico_gui = helico_gui.main:main",
-	        "helico_qt = helico_gui.qt_main:main",
+            "helico_qt = helico_gui.qt_main:main",
         ],
     },
 )

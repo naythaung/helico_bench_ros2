@@ -1,3 +1,5 @@
+import time
+
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -6,11 +8,43 @@ from PySide6.QtWidgets import (
 )
 
 
+GREEN = "#2e7d32"
+ORANGE = "#ed8b00"
+RED = "#c62828"
+
+
+def set_status(label, text, colour):
+
+    label.setText(text)
+
+    label.setStyleSheet(
+        f"font-weight: bold; color: {colour};"
+    )
+
+
 class DiagnosticsTab(QWidget):
 
     def __init__(self, parent=None):
 
         super().__init__(parent)
+
+        # ========================================================
+        # CONNECTION STATE
+        # ========================================================
+
+        self.start_time = time.monotonic()
+
+        self.sensor_was_streaming = False
+        self.sensor_restart_since = None
+
+        self.helico_was_streaming = False
+        self.helico_restart_since = None
+
+        self.restart_grace_period = 5.0
+
+        # ========================================================
+        # MAIN LAYOUT
+        # ========================================================
 
         layout = QVBoxLayout(self)
 
@@ -39,8 +73,12 @@ class DiagnosticsTab(QWidget):
             workbench_box
         )
 
-        self.backend_status = QLabel(
-            "Workbench Backend: CHECKING"
+        self.backend_status = QLabel()
+
+        set_status(
+            self.backend_status,
+            "Workbench Backend: CHECKING",
+            ORANGE,
         )
 
         workbench_layout.addWidget(
@@ -52,7 +90,7 @@ class DiagnosticsTab(QWidget):
         )
 
         # ========================================================
-        # BENCH SENSOR CONTROLLER
+        # BENCH SENSORS
         # ========================================================
 
         sensor_box = QGroupBox(
@@ -63,16 +101,26 @@ class DiagnosticsTab(QWidget):
             sensor_box
         )
 
-        self.sensor_controller_status = QLabel(
-            "Bench Sensor Controller: WAITING"
+        self.sensor_controller_status = QLabel()
+        self.laser_status = QLabel()
+        self.force_status = QLabel()
+
+        set_status(
+            self.sensor_controller_status,
+            "Bench Sensor Controller: WAITING",
+            ORANGE,
         )
 
-        self.laser_status = QLabel(
-            "    Laser: WAITING"
+        set_status(
+            self.laser_status,
+            "    Laser: WAITING",
+            ORANGE,
         )
 
-        self.force_status = QLabel(
-            "    Force: WAITING"
+        set_status(
+            self.force_status,
+            "    Force: WAITING",
+            ORANGE,
         )
 
         sensor_layout.addWidget(
@@ -92,7 +140,7 @@ class DiagnosticsTab(QWidget):
         )
 
         # ========================================================
-        # HELICO CONTROLLER
+        # HELICO
         # ========================================================
 
         helico_box = QGroupBox(
@@ -103,12 +151,19 @@ class DiagnosticsTab(QWidget):
             helico_box
         )
 
-        self.helico_controller_status = QLabel(
-            "Helico Controller: WAITING"
+        self.helico_controller_status = QLabel()
+        self.pressure_status = QLabel()
+
+        set_status(
+            self.helico_controller_status,
+            "Helico Controller: WAITING",
+            ORANGE,
         )
 
-        self.pressure_status = QLabel(
-            "    Pressure: WAITING"
+        set_status(
+            self.pressure_status,
+            "    Pressure: WAITING",
+            ORANGE,
         )
 
         helico_layout.addWidget(
@@ -125,6 +180,10 @@ class DiagnosticsTab(QWidget):
 
         layout.addStretch()
 
+    # ============================================================
+    # WORKBENCH STATUS
+    # ============================================================
+
     def set_backend_connected(
         self,
         connected,
@@ -132,15 +191,23 @@ class DiagnosticsTab(QWidget):
 
         if connected:
 
-            self.backend_status.setText(
-                "Workbench Backend: CONNECTED"
+            set_status(
+                self.backend_status,
+                "Workbench Backend: CONNECTED",
+                GREEN,
             )
 
         else:
 
-            self.backend_status.setText(
-                "Workbench Backend: WAITING"
+            set_status(
+                self.backend_status,
+                "Workbench Backend: WAITING",
+                ORANGE,
             )
+
+    # ============================================================
+    # HARDWARE STATUS
+    # ============================================================
 
     def update_hardware(
         self,
@@ -149,58 +216,350 @@ class DiagnosticsTab(QWidget):
         pressure_recent,
     ):
 
-        # ========================================================
-        # BENCH SENSOR CONTROLLER
-        # ========================================================
+        now = time.monotonic()
 
-        if laser_recent and force_recent:
+        self.update_bench_sensors(
+            now,
+            laser_recent,
+            force_recent,
+        )
 
-            self.sensor_controller_status.setText(
-                "Bench Sensor Controller: CONNECTED"
+        self.update_helico(
+            now,
+            pressure_recent,
+        )
+
+    # ============================================================
+    # BENCH SENSOR CONTROLLER
+    # ============================================================
+
+    def update_bench_sensors(
+        self,
+        now,
+        laser_recent,
+        force_recent,
+    ):
+
+        sensor_streaming = (
+            laser_recent
+            and force_recent
+        )
+
+        # --------------------------------------------------------
+        # BOTH STREAMING
+        # --------------------------------------------------------
+
+        if sensor_streaming:
+
+            self.sensor_was_streaming = True
+            self.sensor_restart_since = None
+
+            set_status(
+                self.sensor_controller_status,
+                "Bench Sensor Controller: CONNECTED",
+                GREEN,
             )
 
-        elif laser_recent or force_recent:
+            set_status(
+                self.laser_status,
+                "    Laser: STREAMING",
+                GREEN,
+            )
 
-            self.sensor_controller_status.setText(
-                "Bench Sensor Controller: PARTIAL DATA"
+            set_status(
+                self.force_status,
+                "    Force: STREAMING",
+                GREEN,
+            )
+
+            return
+
+        # --------------------------------------------------------
+        # PARTIAL DATA
+        # --------------------------------------------------------
+
+        if laser_recent or force_recent:
+
+            self.sensor_was_streaming = True
+            self.sensor_restart_since = None
+
+            set_status(
+                self.sensor_controller_status,
+                "Bench Sensor Controller: PARTIAL DATA",
+                ORANGE,
+            )
+
+            if laser_recent:
+
+                set_status(
+                    self.laser_status,
+                    "    Laser: STREAMING",
+                    GREEN,
+                )
+
+            else:
+
+                set_status(
+                    self.laser_status,
+                    "    Laser: RESTARTING",
+                    ORANGE,
+                )
+
+            if force_recent:
+
+                set_status(
+                    self.force_status,
+                    "    Force: STREAMING",
+                    GREEN,
+                )
+
+            else:
+
+                set_status(
+                    self.force_status,
+                    "    Force: RESTARTING",
+                    ORANGE,
+                )
+
+            return
+
+        # --------------------------------------------------------
+        # PREVIOUSLY STREAMING, NOW LOST
+        # --------------------------------------------------------
+
+        if self.sensor_was_streaming:
+
+            if self.sensor_restart_since is None:
+
+                self.sensor_restart_since = now
+
+            restart_age = (
+                now
+                -
+                self.sensor_restart_since
+            )
+
+            if (
+                restart_age
+                <
+                self.restart_grace_period
+            ):
+
+                set_status(
+                    self.sensor_controller_status,
+                    "Bench Sensor Controller: RESTARTING",
+                    ORANGE,
+                )
+
+                set_status(
+                    self.laser_status,
+                    "    Laser: RESTARTING",
+                    ORANGE,
+                )
+
+                set_status(
+                    self.force_status,
+                    "    Force: RESTARTING",
+                    ORANGE,
+                )
+
+            else:
+
+                set_status(
+                    self.sensor_controller_status,
+                    "Bench Sensor Controller: DISCONNECTED",
+                    RED,
+                )
+
+                set_status(
+                    self.laser_status,
+                    "    Laser: NO DATA",
+                    RED,
+                )
+
+                set_status(
+                    self.force_status,
+                    "    Force: NO DATA",
+                    RED,
+                )
+
+            return
+
+        # --------------------------------------------------------
+        # INITIAL STARTUP
+        # --------------------------------------------------------
+
+        startup_age = (
+            now
+            -
+            self.start_time
+        )
+
+        if (
+            startup_age
+            <
+            self.restart_grace_period
+        ):
+
+            set_status(
+                self.sensor_controller_status,
+                "Bench Sensor Controller: WAITING",
+                ORANGE,
+            )
+
+            set_status(
+                self.laser_status,
+                "    Laser: WAITING",
+                ORANGE,
+            )
+
+            set_status(
+                self.force_status,
+                "    Force: WAITING",
+                ORANGE,
             )
 
         else:
 
-            self.sensor_controller_status.setText(
-                "Bench Sensor Controller: DISCONNECTED"
+            set_status(
+                self.sensor_controller_status,
+                "Bench Sensor Controller: DISCONNECTED",
+                RED,
             )
 
-        self.laser_status.setText(
-            "    Laser: STREAMING"
-            if laser_recent
-            else "    Laser: NO DATA"
-        )
+            set_status(
+                self.laser_status,
+                "    Laser: NO DATA",
+                RED,
+            )
 
-        self.force_status.setText(
-            "    Force: STREAMING"
-            if force_recent
-            else "    Force: NO DATA"
-        )
+            set_status(
+                self.force_status,
+                "    Force: NO DATA",
+                RED,
+            )
 
-        # ========================================================
-        # HELICO CONTROLLER
-        # ========================================================
+    # ============================================================
+    # HELICO CONTROLLER
+    # ============================================================
+
+    def update_helico(
+        self,
+        now,
+        pressure_recent,
+    ):
+
+        # --------------------------------------------------------
+        # STREAMING
+        # --------------------------------------------------------
 
         if pressure_recent:
 
-            self.helico_controller_status.setText(
-                "Helico Controller: CONNECTED"
+            self.helico_was_streaming = True
+            self.helico_restart_since = None
+
+            set_status(
+                self.helico_controller_status,
+                "Helico Controller: CONNECTED",
+                GREEN,
+            )
+
+            set_status(
+                self.pressure_status,
+                "    Pressure: STREAMING",
+                GREEN,
+            )
+
+            return
+
+        # --------------------------------------------------------
+        # PREVIOUSLY STREAMING, NOW LOST
+        # --------------------------------------------------------
+
+        if self.helico_was_streaming:
+
+            if self.helico_restart_since is None:
+
+                self.helico_restart_since = now
+
+            restart_age = (
+                now
+                -
+                self.helico_restart_since
+            )
+
+            if (
+                restart_age
+                <
+                self.restart_grace_period
+            ):
+
+                set_status(
+                    self.helico_controller_status,
+                    "Helico Controller: RESTARTING",
+                    ORANGE,
+                )
+
+                set_status(
+                    self.pressure_status,
+                    "    Pressure: RESTARTING",
+                    ORANGE,
+                )
+
+            else:
+
+                set_status(
+                    self.helico_controller_status,
+                    "Helico Controller: DISCONNECTED",
+                    RED,
+                )
+
+                set_status(
+                    self.pressure_status,
+                    "    Pressure: NO DATA",
+                    RED,
+                )
+
+            return
+
+        # --------------------------------------------------------
+        # INITIAL STARTUP
+        # --------------------------------------------------------
+
+        startup_age = (
+            now
+            -
+            self.start_time
+        )
+
+        if (
+            startup_age
+            <
+            self.restart_grace_period
+        ):
+
+            set_status(
+                self.helico_controller_status,
+                "Helico Controller: WAITING",
+                ORANGE,
+            )
+
+            set_status(
+                self.pressure_status,
+                "    Pressure: WAITING",
+                ORANGE,
             )
 
         else:
 
-            self.helico_controller_status.setText(
-                "Helico Controller: DISCONNECTED"
+            set_status(
+                self.helico_controller_status,
+                "Helico Controller: DISCONNECTED",
+                RED,
             )
 
-        self.pressure_status.setText(
-            "    Pressure: STREAMING"
-            if pressure_recent
-            else "    Pressure: NO DATA"
-        )
+            set_status(
+                self.pressure_status,
+                "    Pressure: NO DATA",
+                RED,
+            )

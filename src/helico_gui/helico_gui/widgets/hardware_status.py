@@ -1,3 +1,5 @@
+import time
+
 from PySide6.QtWidgets import (
     QWidget,
     QHBoxLayout,
@@ -6,11 +8,43 @@ from PySide6.QtWidgets import (
 )
 
 
+GREEN = "#2e7d32"
+ORANGE = "#ed8b00"
+RED = "#c62828"
+
+
+def set_status(label, text, colour):
+
+    label.setText(text)
+
+    label.setStyleSheet(
+        f"font-weight: bold; color: {colour};"
+    )
+
+
 class HardwareStatusWidget(QWidget):
 
     def __init__(self, parent=None):
 
         super().__init__(parent)
+
+        # ========================================================
+        # CONNECTION STATE
+        # ========================================================
+
+        self.start_time = time.monotonic()
+
+        self.sensor_was_streaming = False
+        self.sensor_restart_since = None
+
+        self.helico_was_streaming = False
+        self.helico_restart_since = None
+
+        self.restart_grace_period = 5.0
+
+        # ========================================================
+        # MAIN LAYOUT
+        # ========================================================
 
         layout = QHBoxLayout(self)
 
@@ -41,9 +75,7 @@ class HardwareStatusWidget(QWidget):
             "Force: --"
         )
 
-        self.sensor_status_label = QLabel(
-            "WAITING"
-        )
+        self.sensor_status_label = QLabel()
 
         self.laser_label.setStyleSheet(
             "font-size: 16px; "
@@ -55,8 +87,10 @@ class HardwareStatusWidget(QWidget):
             "font-weight: bold;"
         )
 
-        self.sensor_status_label.setStyleSheet(
-            "font-weight: bold;"
+        set_status(
+            self.sensor_status_label,
+            "WAITING",
+            ORANGE,
         )
 
         sensor_layout.addWidget(
@@ -89,17 +123,17 @@ class HardwareStatusWidget(QWidget):
             "Pressure: --"
         )
 
-        self.helico_status_label = QLabel(
-            "WAITING"
-        )
+        self.helico_status_label = QLabel()
 
         self.pressure_label.setStyleSheet(
             "font-size: 16px; "
             "font-weight: bold;"
         )
 
-        self.helico_status_label.setStyleSheet(
-            "font-weight: bold;"
+        set_status(
+            self.helico_status_label,
+            "WAITING",
+            ORANGE,
         )
 
         helico_layout.addWidget(
@@ -113,7 +147,7 @@ class HardwareStatusWidget(QWidget):
         )
 
         # ========================================================
-        # LAYOUT
+        # ADD GROUPS
         # ========================================================
 
         layout.addWidget(
@@ -126,6 +160,10 @@ class HardwareStatusWidget(QWidget):
             1,
         )
 
+    # ============================================================
+    # UPDATE VALUES
+    # ============================================================
+
     def update_values(
         self,
         laser,
@@ -136,8 +174,10 @@ class HardwareStatusWidget(QWidget):
         pressure_recent,
     ):
 
+        now = time.monotonic()
+
         # ========================================================
-        # BENCH SENSOR VALUES
+        # SENSOR VALUES
         # ========================================================
 
         if laser_recent:
@@ -164,10 +204,6 @@ class HardwareStatusWidget(QWidget):
                 "Force: --"
             )
 
-        # ========================================================
-        # HELICO PRESSURE
-        # ========================================================
-
         if pressure_recent:
 
             self.pressure_label.setText(
@@ -181,35 +217,167 @@ class HardwareStatusWidget(QWidget):
             )
 
         # ========================================================
-        # CONTROLLER STATUS
+        # BENCH SENSOR STATUS
         # ========================================================
 
-        if laser_recent and force_recent:
+        sensor_streaming = (
+            laser_recent
+            and force_recent
+        )
 
-            self.sensor_status_label.setText(
-                "STREAMING"
+        if sensor_streaming:
+
+            self.sensor_was_streaming = True
+            self.sensor_restart_since = None
+
+            set_status(
+                self.sensor_status_label,
+                "STREAMING",
+                GREEN,
             )
 
         elif laser_recent or force_recent:
 
-            self.sensor_status_label.setText(
-                "PARTIAL"
+            self.sensor_was_streaming = True
+            self.sensor_restart_since = None
+
+            set_status(
+                self.sensor_status_label,
+                "PARTIAL",
+                ORANGE,
             )
+
+        elif self.sensor_was_streaming:
+
+            if self.sensor_restart_since is None:
+
+                self.sensor_restart_since = now
+
+            restart_age = (
+                now
+                -
+                self.sensor_restart_since
+            )
+
+            if (
+                restart_age
+                <
+                self.restart_grace_period
+            ):
+
+                set_status(
+                    self.sensor_status_label,
+                    "RESTARTING",
+                    ORANGE,
+                )
+
+            else:
+
+                set_status(
+                    self.sensor_status_label,
+                    "DISCONNECTED",
+                    RED,
+                )
 
         else:
 
-            self.sensor_status_label.setText(
-                "WAITING"
+            startup_age = (
+                now
+                -
+                self.start_time
             )
+
+            if (
+                startup_age
+                <
+                self.restart_grace_period
+            ):
+
+                set_status(
+                    self.sensor_status_label,
+                    "WAITING",
+                    ORANGE,
+                )
+
+            else:
+
+                set_status(
+                    self.sensor_status_label,
+                    "DISCONNECTED",
+                    RED,
+                )
+
+        # ========================================================
+        # HELICO STATUS
+        # ========================================================
 
         if pressure_recent:
 
-            self.helico_status_label.setText(
-                "STREAMING"
+            self.helico_was_streaming = True
+            self.helico_restart_since = None
+
+            set_status(
+                self.helico_status_label,
+                "STREAMING",
+                GREEN,
             )
+
+        elif self.helico_was_streaming:
+
+            if self.helico_restart_since is None:
+
+                self.helico_restart_since = now
+
+            restart_age = (
+                now
+                -
+                self.helico_restart_since
+            )
+
+            if (
+                restart_age
+                <
+                self.restart_grace_period
+            ):
+
+                set_status(
+                    self.helico_status_label,
+                    "RESTARTING",
+                    ORANGE,
+                )
+
+            else:
+
+                set_status(
+                    self.helico_status_label,
+                    "DISCONNECTED",
+                    RED,
+                )
 
         else:
 
-            self.helico_status_label.setText(
-                "WAITING"
+            startup_age = (
+                now
+                -
+                self.start_time
             )
+
+            if (
+                startup_age
+                <
+                self.restart_grace_period
+            ):
+
+                set_status(
+                    self.helico_status_label,
+                    "WAITING",
+                    ORANGE,
+                )
+
+            else:
+
+                set_status(
+                    self.helico_status_label,
+                    "DISCONNECTED",
+                    RED,
+                )

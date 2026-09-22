@@ -1,10 +1,10 @@
+import os
 import time
 
 import serial
 
 import rclpy
 from rclpy.node import Node
-
 from std_msgs.msg import Float64
 
 
@@ -26,6 +26,16 @@ class HelicoSensorBridge(Node):
             115200,
         )
 
+        self.declare_parameter(
+            "reconnect_interval",
+            1.0,
+        )
+
+        self.declare_parameter(
+            "data_timeout",
+            3.0,
+        )
+
         self.port_name = (
             self.get_parameter("port")
             .get_parameter_value()
@@ -37,21 +47,38 @@ class HelicoSensorBridge(Node):
             .get_parameter_value()
             .integer_value
         )
-        self.baud_rate = 115200
 
-        self.serial_port = None
-        self.last_connect_attempt = 0.0
-
-        self.laser_publisher = self.create_publisher(
-            Float64,
-            "/helico/sensors/laser",
-            10,
+        self.reconnect_interval = (
+            self.get_parameter("reconnect_interval")
+            .get_parameter_value()
+            .double_value
         )
 
-        self.force_publisher = self.create_publisher(
-            Float64,
-            "/helico/sensors/force",
-            10,
+        self.data_timeout = (
+            self.get_parameter("data_timeout")
+            .get_parameter_value()
+            .double_value
+        )
+
+        self.serial_port = None
+
+        self.last_connect_attempt = 0.0
+        self.last_valid_data_time = None
+
+        self.laser_publisher = (
+            self.create_publisher(
+                Float64,
+                "/helico/sensors/laser",
+                10,
+            )
+        )
+
+        self.force_publisher = (
+            self.create_publisher(
+                Float64,
+                "/helico/sensors/force",
+                10,
+            )
         )
 
         self.timer = self.create_timer(
@@ -60,46 +87,76 @@ class HelicoSensorBridge(Node):
         )
 
         self.get_logger().info(
-            "Sensor ESP32 bridge started."
+            f"Bench sensor bridge started. "
+            f"Port: {self.port_name}"
         )
 
         self.connect_serial()
 
+    def port_exists(self):
+
+        return os.path.exists(
+            self.port_name
+        )
+
     def connect_serial(self):
+
+        if self.serial_port is not None:
+            return
 
         now = time.monotonic()
 
         if (
             now - self.last_connect_attempt
-            < 1.0
+            <
+            self.reconnect_interval
         ):
-
             return
 
         self.last_connect_attempt = now
 
+        if not self.port_exists():
+            return
+
         try:
 
-            self.serial_port = serial.Serial(
+            serial_port = serial.Serial(
                 self.port_name,
                 self.baud_rate,
                 timeout=0.05,
             )
 
-            self.serial_port.reset_input_buffer()
+            serial_port.reset_input_buffer()
+
+            self.serial_port = serial_port
+
+            self.last_valid_data_time = (
+                time.monotonic()
+            )
 
             self.get_logger().info(
-                f"Sensor ESP32 connected: {self.port_name}"
+                f"Bench sensor controller connected: "
+                f"{self.port_name}"
             )
 
         except (
             serial.SerialException,
             OSError,
-        ):
+        ) as error:
 
             self.serial_port = None
 
-    def disconnect_serial(self):
+            self.get_logger().warning(
+                f"Could not connect to bench "
+                f"sensor controller on "
+                f"{self.port_name}: "
+                f"{error}"
+            )
+
+    def disconnect_serial(
+        self,
+        reason=None,
+    ):
 
         if self.serial_port is not None:
 
@@ -112,20 +169,40 @@ class HelicoSensorBridge(Node):
                 pass
 
         self.serial_port = None
+        self.last_valid_data_time = None
 
-        # Prevent immediate reconnect loops.
-        self.last_connect_attempt = time.monotonic()
-
-        self.get_logger().warning(
-            "Sensor ESP32 disconnected. "
-            "Waiting for reconnection..."
+        self.last_connect_attempt = (
+            time.monotonic()
         )
+
+        if reason:
+
+            self.get_logger().warning(
+                f"Bench sensor controller "
+                f"disconnected: {reason}. "
+                f"Waiting for reconnection..."
+            )
+
+        else:
+
+            self.get_logger().warning(
+                "Bench sensor controller "
+                "disconnected. "
+                "Waiting for reconnection..."
+            )
 
     def update(self):
 
         if self.serial_port is None:
 
             self.connect_serial()
+            return
+
+        if not self.port_exists():
+
+            self.disconnect_serial(
+                "USB device disappeared"
+            )
 
             return
 
@@ -141,33 +218,58 @@ class HelicoSensorBridge(Node):
                 .strip()
             )
 
-            if not line:
-                return
+            if line:
 
-            self.parse_line(
-                line
+                valid_data = self.parse_line(
+                    line
+                )
+
+                if valid_data:
+
+                    self.last_valid_data_time = (
+                        time.monotonic()
+                    )
+
+            self.check_data_watchdog()
+
+        except (
+            serial.SerialException,
+            OSError,
+        ) as error:
+
+            self.disconnect_serial(
+                str(error)
             )
 
-        except serial.SerialException as error:
+    def check_data_watchdog(self):
+
+        if self.last_valid_data_time is None:
+            return
+
+        age = (
+            time.monotonic()
+            -
+            self.last_valid_data_time
+        )
+
+        if age > self.data_timeout:
 
             self.get_logger().warning(
-                f"Serial connection lost: {error}"
+                f"No valid bench sensor data "
+                f"for {age:.1f}s. "
+                f"Restarting serial connection."
             )
 
-            self.disconnect_serial()
-
-        except OSError as error:
-
-            self.get_logger().warning(
-                f"USB connection lost: {error}"
+            self.disconnect_serial(
+                "sensor data timeout"
             )
-
-            self.disconnect_serial()
 
     def parse_line(
         self,
         line,
     ):
+
+        valid_data = False
 
         try:
 
@@ -185,46 +287,39 @@ class HelicoSensorBridge(Node):
                     1,
                 )
 
-                key = key.strip().lower()
+                key = (
+                    key
+                    .strip()
+                    .lower()
+                )
 
                 value = float(
                     value.strip()
                 )
 
-                if key in [
-                    "laser",
-                    "force",
-                ]:
+                message = Float64()
+                message.data = value
 
-                    self.publish_sensor(
-                        key,
-                        value,
+                if key == "laser":
+
+                    self.laser_publisher.publish(
+                        message
                     )
 
+                    valid_data = True
+
+                elif key == "force":
+
+                    self.force_publisher.publish(
+                        message
+                    )
+
+                    valid_data = True
+
         except ValueError:
+            return False
 
-            return
-
-    def publish_sensor(
-        self,
-        name,
-        value,
-    ):
-
-        message = Float64()
-        message.data = value
-
-        if name == "laser":
-
-            self.laser_publisher.publish(
-                message
-            )
-
-        elif name == "force":
-
-            self.force_publisher.publish(
-                message
-            )
+        return valid_data
 
     def destroy_node(self):
 
@@ -236,7 +331,6 @@ class HelicoSensorBridge(Node):
                     self.serial_port.close()
 
             except Exception:
-
                 pass
 
         super().destroy_node()
@@ -255,7 +349,6 @@ def main():
         )
 
     except KeyboardInterrupt:
-
         pass
 
     finally:
@@ -267,4 +360,5 @@ def main():
 
 
 if __name__ == "__main__":
+
     main()
