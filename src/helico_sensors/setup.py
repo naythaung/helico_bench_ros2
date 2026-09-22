@@ -5,9 +5,7 @@ package_name = "helico_sensors"
 setup(
     name=package_name,
     version="0.0.0",
-    packages=find_packages(
-        exclude=["test"]
-    ),
+    packages=find_packages(exclude=["test"]),
     data_files=[
         (
             "share/ament_index/resource_index/packages",
@@ -32,6 +30,7 @@ setup(
     entry_points={
         "console_scripts": [
             "fake_sensors = helico_sensors.fake_sensors:main",
+            "serial_bridge = helico_sensors.serial_bridge:main",
         ],
     },
 )
