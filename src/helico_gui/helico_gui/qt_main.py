@@ -2465,6 +2465,64 @@ class HelicoWindow(QMainWindow):
                 "WAITING"
             )
 
+        # --------------------------------------------------------
+        # DIAGNOSTICS STATUS
+        # --------------------------------------------------------
+
+        if laser_recent:
+
+            self.laser_status.setText(
+                "Laser stream: STREAMING"
+            )
+
+        else:
+
+            self.laser_status.setText(
+                "Laser stream: NO DATA"
+            )
+
+        if force_recent:
+
+            self.force_status.setText(
+                "Force stream: STREAMING"
+            )
+
+        else:
+
+            self.force_status.setText(
+                "Force stream: NO DATA"
+            )
+
+        if pressure_recent:
+
+            self.pressure_status.setText(
+                "Pressure stream: STREAMING"
+            )
+
+        else:
+
+            self.pressure_status.setText(
+                "Pressure stream: NO DATA"
+            )
+
+        if active == 3:
+
+            self.sensor_esp32_status.setText(
+                "Sensor ESP32: CONNECTED"
+            )
+
+        elif active > 0:
+
+            self.sensor_esp32_status.setText(
+                "Sensor ESP32: PARTIAL DATA"
+            )
+
+        else:
+
+            self.sensor_esp32_status.setText(
+                "Sensor ESP32: NO DATA"
+            )
+
     # ============================================================
     # DEFAULT TRAJECTORY NAME
     # ============================================================
@@ -2495,43 +2553,85 @@ class HelicoWindow(QMainWindow):
 
     def build_diagnostics_tab(self):
 
-        layout = QVBoxLayout(
-            self.diagnostics_tab
-        )
-
-        heading = QLabel(
-            "System Diagnostics"
-        )
-
-        heading.setStyleSheet(
-            "font-size: 20px; "
-            "font-weight: bold;"
-        )
-
-        layout.addWidget(
-            heading
-        )
-
-        self.backend_status = QLabel(
-            "Workbench Backend: checking..."
-        )
-
-        layout.addWidget(
-            self.backend_status
-        )
-
-        layout.addWidget(
-            QLabel(
-                "Meca500: future status\n"
-                "Laser sensor: live topic\n"
-                "Force sensor: live topic\n"
-                "Pressure sensor: live topic\n"
-                "Helico actuator: future status"
+            layout = QVBoxLayout(
+                self.diagnostics_tab
             )
-        )
 
-        layout.addStretch()
+            heading = QLabel(
+                "System Diagnostics"
+            )
 
+            heading.setStyleSheet(
+                "font-size: 20px; "
+                "font-weight: bold;"
+            )
+
+            layout.addWidget(
+                heading
+            )
+
+            diagnostics_box = QGroupBox(
+                "System Status"
+            )
+
+            diagnostics_layout = QVBoxLayout(
+                diagnostics_box
+            )
+
+            self.backend_status = QLabel(
+                "Workbench Backend: CHECKING"
+            )
+
+            self.sensor_esp32_status = QLabel(
+                "Sensor ESP32: WAITING"
+            )
+
+            self.laser_status = QLabel(
+                "Laser stream: WAITING"
+            )
+
+            self.force_status = QLabel(
+                "Force stream: WAITING"
+            )
+
+            self.pressure_status = QLabel(
+                "Pressure stream: WAITING"
+            )
+
+            self.actuator_status = QLabel(
+                "Actuator ESP32: NOT CONNECTED"
+            )
+
+            diagnostics_layout.addWidget(
+                self.backend_status
+            )
+
+            diagnostics_layout.addWidget(
+                self.sensor_esp32_status
+            )
+
+            diagnostics_layout.addWidget(
+                self.laser_status
+            )
+
+            diagnostics_layout.addWidget(
+                self.force_status
+            )
+
+            diagnostics_layout.addWidget(
+                self.pressure_status
+            )
+
+            diagnostics_layout.addWidget(
+                self.actuator_status
+            )
+
+            layout.addWidget(
+                diagnostics_box
+            )
+
+            layout.addStretch()    
+            
     # ============================================================
     # ROS LOOP
     # ============================================================

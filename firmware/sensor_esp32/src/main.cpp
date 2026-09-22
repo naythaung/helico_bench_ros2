@@ -7,16 +7,12 @@ void setup() {
 void loop() {
   float laser = random(370, 430) / 10.0;
   float force = random(100, 200) / 100.0;
-  float pressure = random(200, 300) / 10.0;
 
   Serial.print("laser=");
   Serial.print(laser);
 
   Serial.print(",force=");
-  Serial.print(force);
-
-  Serial.print(",pressure=");
-  Serial.println(pressure);
+  Serial.println(force);
 
   delay(100);
 }

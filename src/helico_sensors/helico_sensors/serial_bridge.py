@@ -1,3 +1,5 @@
+import time
+
 import serial
 
 import rclpy
@@ -14,19 +16,31 @@ class HelicoSensorBridge(Node):
             "helico_sensor_bridge"
         )
 
-        # --------------------------------------------------------
-        # SERIAL CONNECTION
-        # --------------------------------------------------------
-
-        self.serial_port = serial.Serial(
+        self.declare_parameter(
+            "port",
             "/dev/ttyUSB0",
-            115200,
-            timeout=0.05,
         )
 
-        # --------------------------------------------------------
-        # ROS PUBLISHERS
-        # --------------------------------------------------------
+        self.declare_parameter(
+            "baud_rate",
+            115200,
+        )
+
+        self.port_name = (
+            self.get_parameter("port")
+            .get_parameter_value()
+            .string_value
+        )
+
+        self.baud_rate = (
+            self.get_parameter("baud_rate")
+            .get_parameter_value()
+            .integer_value
+        )
+        self.baud_rate = 115200
+
+        self.serial_port = None
+        self.last_connect_attempt = 0.0
 
         self.laser_publisher = self.create_publisher(
             Float64,
@@ -40,62 +54,80 @@ class HelicoSensorBridge(Node):
             10,
         )
 
-        self.pressure_publisher = self.create_publisher(
-            Float64,
-            "/helico/sensors/pressure",
-            10,
-        )
-
-        # --------------------------------------------------------
-        # TIMER
-        # --------------------------------------------------------
-
         self.timer = self.create_timer(
             0.01,
-            self.read_serial,
+            self.update,
         )
 
         self.get_logger().info(
-            "Helico sensor bridge connected to /dev/ttyUSB0"
+            "Sensor ESP32 bridge started."
         )
 
-    # ============================================================
-    # PUBLISH ONE SENSOR
-    # ============================================================
+        self.connect_serial()
 
-    def publish_sensor(
-        self,
-        name,
-        value,
-    ):
+    def connect_serial(self):
 
-        message = Float64()
+        now = time.monotonic()
 
-        message.data = value
+        if (
+            now - self.last_connect_attempt
+            < 1.0
+        ):
 
-        if name == "laser":
+            return
 
-            self.laser_publisher.publish(
-                message
+        self.last_connect_attempt = now
+
+        try:
+
+            self.serial_port = serial.Serial(
+                self.port_name,
+                self.baud_rate,
+                timeout=0.05,
             )
 
-        elif name == "force":
+            self.serial_port.reset_input_buffer()
 
-            self.force_publisher.publish(
-                message
+            self.get_logger().info(
+                f"Sensor ESP32 connected: {self.port_name}"
             )
 
-        elif name == "pressure":
+        except (
+            serial.SerialException,
+            OSError,
+        ):
 
-            self.pressure_publisher.publish(
-                message
-            )
+            self.serial_port = None
 
-    # ============================================================
-    # READ SERIAL
-    # ============================================================
+    def disconnect_serial(self):
 
-    def read_serial(self):
+        if self.serial_port is not None:
+
+            try:
+
+                if self.serial_port.is_open:
+                    self.serial_port.close()
+
+            except Exception:
+                pass
+
+        self.serial_port = None
+
+        # Prevent immediate reconnect loops.
+        self.last_connect_attempt = time.monotonic()
+
+        self.get_logger().warning(
+            "Sensor ESP32 disconnected. "
+            "Waiting for reconnection..."
+        )
+
+    def update(self):
+
+        if self.serial_port is None:
+
+            self.connect_serial()
+
+            return
 
         try:
 
@@ -110,16 +142,34 @@ class HelicoSensorBridge(Node):
             )
 
             if not line:
-
                 return
 
-            # Supports both:
-            #
-            # laser=40.2
-            #
-            # and:
-            #
-            # laser=40.2,force=1.4,pressure=25.0
+            self.parse_line(
+                line
+            )
+
+        except serial.SerialException as error:
+
+            self.get_logger().warning(
+                f"Serial connection lost: {error}"
+            )
+
+            self.disconnect_serial()
+
+        except OSError as error:
+
+            self.get_logger().warning(
+                f"USB connection lost: {error}"
+            )
+
+            self.disconnect_serial()
+
+    def parse_line(
+        self,
+        line,
+    ):
+
+        try:
 
             items = line.split(",")
 
@@ -128,7 +178,6 @@ class HelicoSensorBridge(Node):
                 item = item.strip()
 
                 if "=" not in item:
-
                     continue
 
                 key, value = item.split(
@@ -145,7 +194,6 @@ class HelicoSensorBridge(Node):
                 if key in [
                     "laser",
                     "force",
-                    "pressure",
                 ]:
 
                     self.publish_sensor(
@@ -153,34 +201,43 @@ class HelicoSensorBridge(Node):
                         value,
                     )
 
-        except ValueError as error:
+        except ValueError:
 
-            self.get_logger().warning(
-                f"Invalid sensor value: {error}"
+            return
+
+    def publish_sensor(
+        self,
+        name,
+        value,
+    ):
+
+        message = Float64()
+        message.data = value
+
+        if name == "laser":
+
+            self.laser_publisher.publish(
+                message
             )
 
-        except serial.SerialException as error:
+        elif name == "force":
 
-            self.get_logger().error(
-                f"Serial connection error: {error}"
+            self.force_publisher.publish(
+                message
             )
-
-    # ============================================================
-    # CLEANUP
-    # ============================================================
 
     def destroy_node(self):
 
-        if (
-            hasattr(
-                self,
-                "serial_port",
-            )
-            and
-            self.serial_port.is_open
-        ):
+        if self.serial_port is not None:
 
-            self.serial_port.close()
+            try:
+
+                if self.serial_port.is_open:
+                    self.serial_port.close()
+
+            except Exception:
+
+                pass
 
         super().destroy_node()
 
@@ -206,10 +263,8 @@ def main():
         node.destroy_node()
 
         if rclpy.ok():
-
             rclpy.shutdown()
 
 
 if __name__ == "__main__":
-
     main()
