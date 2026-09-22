@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QTabWidget,
     QMessageBox,
     QInputDialog,
+    QCheckBox,
 )
 
 from meca500_interfaces.srv import (
@@ -46,10 +47,7 @@ class HelicoRosNode(Node):
     def __init__(self):
         super().__init__("helico_qt_gui")
 
-        # ========================================================
-        # SERVICES
-        # ========================================================
-
+        # Services
         self.list_poses_client = self.create_client(
             ListPoses,
             "/meca/list_poses",
@@ -80,10 +78,7 @@ class HelicoRosNode(Node):
             "/meca/delete_trajectory",
         )
 
-        # ========================================================
-        # ACTIONS
-        # ========================================================
-
+        # Actions
         self.plan_client = ActionClient(
             self,
             PlanTrajectory,
@@ -110,19 +105,14 @@ class HelicoWindow(QMainWindow):
 
         self.node = node
 
-        # --------------------------------------------------------
-        # CYCLE STATE
-        # --------------------------------------------------------
-
+        # Cycle state
         self.validated_cycle_names = []
         self.pending_cycle_names = []
         self.pending_cycle_details = {}
-
         self.cycle_current_index = 0
-
-        # --------------------------------------------------------
-        # WINDOW
-        # --------------------------------------------------------
+        self.cycle_running = False
+        self.cycle_paused = False
+        self.stop_cycle_requested = False
 
         self.setWindowTitle("Helico Bench")
         self.resize(1100, 800)
@@ -131,20 +121,12 @@ class HelicoWindow(QMainWindow):
 
         # ROS spin inside Qt event loop
         self.ros_timer = QTimer(self)
-
-        self.ros_timer.timeout.connect(
-            self.spin_ros
-        )
-
+        self.ros_timer.timeout.connect(self.spin_ros)
         self.ros_timer.start(20)
 
         # Retry backend connection
         self.backend_timer = QTimer(self)
-
-        self.backend_timer.timeout.connect(
-            self.wait_for_backend
-        )
-
+        self.backend_timer.timeout.connect(self.wait_for_backend)
         self.backend_timer.start(500)
 
     # ============================================================
@@ -154,70 +136,36 @@ class HelicoWindow(QMainWindow):
     def build_gui(self):
 
         central = QWidget()
+        self.setCentralWidget(central)
 
-        self.setCentralWidget(
-            central
-        )
+        outer = QVBoxLayout(central)
 
-        outer = QVBoxLayout(
-            central
-        )
-
-        title = QLabel(
-            "HELICO BENCH"
-        )
-
+        title = QLabel("HELICO BENCH")
         title.setStyleSheet(
-            "font-size: 26px; "
-            "font-weight: bold; "
-            "margin: 10px;"
+            "font-size: 26px; font-weight: bold; margin: 10px;"
         )
-
-        outer.addWidget(
-            title
-        )
+        outer.addWidget(title)
 
         self.tabs = QTabWidget()
-
-        outer.addWidget(
-            self.tabs
-        )
+        outer.addWidget(self.tabs)
 
         self.configure_tab = QWidget()
         self.operate_tab = QWidget()
         self.diagnostics_tab = QWidget()
 
-        self.tabs.addTab(
-            self.operate_tab,
-            "Operate",
-        )
-
-        self.tabs.addTab(
-            self.configure_tab,
-            "Configure",
-        )
-
-        self.tabs.addTab(
-            self.diagnostics_tab,
-            "Diagnostics",
-        )
+        self.tabs.addTab(self.operate_tab, "Operate")
+        self.tabs.addTab(self.configure_tab, "Configure")
+        self.tabs.addTab(self.diagnostics_tab, "Diagnostics")
 
         self.build_configure_tab()
         self.build_operate_tab()
         self.build_diagnostics_tab()
 
-        self.status_label = QLabel(
-            "Starting..."
-        )
-
+        self.status_label = QLabel("Starting...")
         self.status_label.setStyleSheet(
-            "padding: 8px; "
-            "font-weight: bold;"
+            "padding: 8px; font-weight: bold;"
         )
-
-        outer.addWidget(
-            self.status_label
-        )
+        outer.addWidget(self.status_label)
 
     # ============================================================
     # CONFIGURE TAB
@@ -225,23 +173,13 @@ class HelicoWindow(QMainWindow):
 
     def build_configure_tab(self):
 
-        layout = QHBoxLayout(
-            self.configure_tab
-        )
+        layout = QHBoxLayout(self.configure_tab)
 
-        # --------------------------------------------------------
-        # LEFT SIDE
-        # --------------------------------------------------------
-
+        # LEFT
         left = QVBoxLayout()
 
-        planning_box = QGroupBox(
-            "Trajectory Planning"
-        )
-
-        planning_form = QFormLayout(
-            planning_box
-        )
+        planning_box = QGroupBox("Trajectory Planning")
+        planning_form = QFormLayout(planning_box)
 
         self.start_pose_box = QComboBox()
         self.target_pose_box = QComboBox()
@@ -254,284 +192,130 @@ class HelicoWindow(QMainWindow):
             self.update_default_trajectory_name
         )
 
-        self.trajectory_name_entry = QLineEdit(
-            "gui_trajectory"
-        )
+        self.trajectory_name_entry = QLineEdit("gui_trajectory")
 
         self.candidate_spinbox = QSpinBox()
-
-        self.candidate_spinbox.setRange(
-            1,
-            50,
-        )
-
-        self.candidate_spinbox.setValue(
-            3
-        )
+        self.candidate_spinbox.setRange(1, 50)
+        self.candidate_spinbox.setValue(3)
 
         self.speed_spinbox = QSpinBox()
-
-        self.speed_spinbox.setRange(
-            1,
-            100,
-        )
-
-        self.speed_spinbox.setValue(
-            20
-        )
-
-        self.speed_spinbox.setSuffix(
-            " %"
-        )
+        self.speed_spinbox.setRange(1, 100)
+        self.speed_spinbox.setValue(20)
+        self.speed_spinbox.setSuffix(" %")
 
         self.clearance_spinbox = QSpinBox()
+        self.clearance_spinbox.setRange(0, 200)
+        self.clearance_spinbox.setValue(10)
+        self.clearance_spinbox.setSuffix(" mm")
 
-        self.clearance_spinbox.setRange(
-            0,
-            200,
-        )
-
-        self.clearance_spinbox.setValue(
-            10
-        )
-
-        self.clearance_spinbox.setSuffix(
-            " mm"
-        )
-
-        planning_form.addRow(
-            "Start pose",
-            self.start_pose_box,
-        )
-
-        planning_form.addRow(
-            "Target pose",
-            self.target_pose_box,
-        )
-
+        planning_form.addRow("Start pose", self.start_pose_box)
+        planning_form.addRow("Target pose", self.target_pose_box)
         planning_form.addRow(
             "Trajectory name",
             self.trajectory_name_entry,
         )
-
         planning_form.addRow(
             "Candidates",
             self.candidate_spinbox,
         )
-
         planning_form.addRow(
             "Speed scaling",
             self.speed_spinbox,
         )
-
         planning_form.addRow(
             "Minimum clearance",
             self.clearance_spinbox,
         )
 
-        self.plan_button = QPushButton(
-            "PLAN TRAJECTORY"
-        )
-
-        self.plan_button.clicked.connect(
-            self.plan_trajectory
-        )
-
-        planning_form.addRow(
-            self.plan_button
-        )
+        self.plan_button = QPushButton("PLAN TRAJECTORY")
+        self.plan_button.clicked.connect(self.plan_trajectory)
+        planning_form.addRow(self.plan_button)
 
         self.progress = QProgressBar()
-
-        self.progress.setRange(
-            0,
-            100,
-        )
-
-        self.progress.setValue(
-            0
-        )
+        self.progress.setRange(0, 100)
+        self.progress.setValue(0)
 
         planning_form.addRow(
             "Progress",
             self.progress,
         )
 
-        left.addWidget(
-            planning_box
-        )
+        left.addWidget(planning_box)
 
-        # --------------------------------------------------------
-        # POSE LIBRARY
-        # --------------------------------------------------------
-
-        pose_box = QGroupBox(
-            "Pose Library"
-        )
-
-        pose_layout = QVBoxLayout(
-            pose_box
-        )
+        # Pose library
+        pose_box = QGroupBox("Pose Library")
+        pose_layout = QVBoxLayout(pose_box)
 
         self.pose_list = QListWidget()
-
-        pose_layout.addWidget(
-            self.pose_list
-        )
+        pose_layout.addWidget(self.pose_list)
 
         pose_buttons = QHBoxLayout()
 
         save_pose_button = QPushButton(
             "Save Current Robot Pose"
         )
+        save_pose_button.clicked.connect(self.capture_pose)
 
-        save_pose_button.clicked.connect(
-            self.capture_pose
-        )
+        delete_pose_button = QPushButton("Delete Pose")
+        delete_pose_button.clicked.connect(self.delete_pose)
 
-        delete_pose_button = QPushButton(
-            "Delete Pose"
-        )
+        pose_buttons.addWidget(save_pose_button)
+        pose_buttons.addWidget(delete_pose_button)
 
-        delete_pose_button.clicked.connect(
-            self.delete_pose
-        )
+        pose_layout.addLayout(pose_buttons)
+        left.addWidget(pose_box)
 
-        pose_buttons.addWidget(
-            save_pose_button
-        )
-
-        pose_buttons.addWidget(
-            delete_pose_button
-        )
-
-        pose_layout.addLayout(
-            pose_buttons
-        )
-
-        left.addWidget(
-            pose_box
-        )
-
-        # --------------------------------------------------------
-        # RIGHT SIDE
-        # --------------------------------------------------------
-
+        # RIGHT
         right = QVBoxLayout()
 
-        trajectory_box = QGroupBox(
-            "Saved Trajectories"
-        )
-
-        trajectory_layout = QVBoxLayout(
-            trajectory_box
-        )
+        trajectory_box = QGroupBox("Saved Trajectories")
+        trajectory_layout = QVBoxLayout(trajectory_box)
 
         self.trajectory_list = QListWidget()
-
         self.trajectory_list.currentTextChanged.connect(
             self.inspect_trajectory
         )
-
-        trajectory_layout.addWidget(
-            self.trajectory_list
-        )
+        trajectory_layout.addWidget(self.trajectory_list)
 
         trajectory_buttons = QHBoxLayout()
 
-        refresh_button = QPushButton(
-            "Refresh"
-        )
+        refresh_button = QPushButton("Refresh")
+        refresh_button.clicked.connect(self.refresh_all)
 
-        refresh_button.clicked.connect(
-            self.refresh_all
-        )
+        go_button = QPushButton("Go To Start")
+        go_button.clicked.connect(self.go_to_start)
 
-        go_button = QPushButton(
-            "Go To Start"
-        )
-
-        go_button.clicked.connect(
-            self.go_to_start
-        )
-
-        execute_button = QPushButton(
-            "Execute"
-        )
-
+        execute_button = QPushButton("Execute")
         execute_button.clicked.connect(
             self.execute_trajectory
         )
 
-        delete_button = QPushButton(
-            "Delete"
-        )
-
+        delete_button = QPushButton("Delete")
         delete_button.clicked.connect(
             self.delete_trajectory
         )
 
-        trajectory_buttons.addWidget(
-            refresh_button
-        )
+        trajectory_buttons.addWidget(refresh_button)
+        trajectory_buttons.addWidget(go_button)
+        trajectory_buttons.addWidget(execute_button)
+        trajectory_buttons.addWidget(delete_button)
 
-        trajectory_buttons.addWidget(
-            go_button
-        )
+        trajectory_layout.addLayout(trajectory_buttons)
+        right.addWidget(trajectory_box)
 
-        trajectory_buttons.addWidget(
-            execute_button
-        )
-
-        trajectory_buttons.addWidget(
-            delete_button
-        )
-
-        trajectory_layout.addLayout(
-            trajectory_buttons
-        )
-
-        right.addWidget(
-            trajectory_box
-        )
-
-        # --------------------------------------------------------
-        # TRAJECTORY DETAILS
-        # --------------------------------------------------------
-
-        details_box = QGroupBox(
-            "Trajectory Details"
-        )
-
-        details_layout = QVBoxLayout(
-            details_box
-        )
+        details_box = QGroupBox("Trajectory Details")
+        details_layout = QVBoxLayout(details_box)
 
         self.details_label = QLabel(
             "Select a saved trajectory."
         )
+        self.details_label.setWordWrap(True)
+        details_layout.addWidget(self.details_label)
 
-        self.details_label.setWordWrap(
-            True
-        )
+        right.addWidget(details_box)
 
-        details_layout.addWidget(
-            self.details_label
-        )
-
-        right.addWidget(
-            details_box
-        )
-
-        layout.addLayout(
-            left,
-            1,
-        )
-
-        layout.addLayout(
-            right,
-            1,
-        )
+        layout.addLayout(left, 1)
+        layout.addLayout(right, 1)
 
     # ============================================================
     # OPERATE TAB
@@ -539,51 +323,30 @@ class HelicoWindow(QMainWindow):
 
     def build_operate_tab(self):
 
-        layout = QVBoxLayout(
-            self.operate_tab
-        )
+        layout = QVBoxLayout(self.operate_tab)
 
-        heading = QLabel(
-            "Experiment Operation"
-        )
-
+        heading = QLabel("Experiment Operation")
         heading.setStyleSheet(
-            "font-size: 20px; "
-            "font-weight: bold;"
+            "font-size: 20px; font-weight: bold;"
         )
-
-        layout.addWidget(
-            heading
-        )
+        layout.addWidget(heading)
 
         layout.addWidget(
             QLabel(
-                "Build a cycle from validated saved trajectories."
+                "Build and run a validated sequence of "
+                "saved trajectories."
             )
         )
 
-        cycle_box = QGroupBox(
-            "Experiment Cycle"
-        )
-
-        cycle_layout = QVBoxLayout(
-            cycle_box
-        )
-
-        # --------------------------------------------------------
-        # TRAJECTORY STEPS
-        # --------------------------------------------------------
+        cycle_box = QGroupBox("Experiment Cycle")
+        cycle_layout = QVBoxLayout(cycle_box)
 
         self.cycle_trajectory_boxes = []
 
         for i in range(4):
 
             row = QHBoxLayout()
-
-            label = QLabel(
-                f"Step {i + 1}"
-            )
-
+            label = QLabel(f"Step {i + 1}")
             trajectory_box = QComboBox()
 
             trajectory_box.addItem(
@@ -598,89 +361,77 @@ class HelicoWindow(QMainWindow):
                 trajectory_box
             )
 
-            row.addWidget(
-                label
-            )
+            row.addWidget(label)
+            row.addWidget(trajectory_box)
 
-            row.addWidget(
-                trajectory_box
-            )
+            cycle_layout.addLayout(row)
 
-            cycle_layout.addLayout(
-                row
-            )
-
-        # --------------------------------------------------------
-        # VALIDATION
-        # --------------------------------------------------------
-
+        # Validation
         self.validate_cycle_button = QPushButton(
             "VALIDATE CYCLE"
         )
-
         self.validate_cycle_button.clicked.connect(
             self.validate_cycle
         )
+        cycle_layout.addWidget(self.validate_cycle_button)
 
+        # Operator mode
+        self.pause_each_step_checkbox = QCheckBox(
+            "Pause after each step"
+        )
+        self.pause_each_step_checkbox.setChecked(True)
         cycle_layout.addWidget(
-            self.validate_cycle_button
+            self.pause_each_step_checkbox
         )
 
         self.cycle_status_label = QLabel(
             "Cycle not validated."
         )
-
-        self.cycle_status_label.setWordWrap(
-            True
-        )
-
+        self.cycle_status_label.setWordWrap(True)
         cycle_layout.addWidget(
             self.cycle_status_label
         )
 
-        # --------------------------------------------------------
-        # CYCLE PROGRESS
-        # --------------------------------------------------------
-
+        # Progress
         self.cycle_progress = QProgressBar()
+        self.cycle_progress.setRange(0, 100)
+        self.cycle_progress.setValue(0)
+        cycle_layout.addWidget(self.cycle_progress)
 
-        self.cycle_progress.setRange(
-            0,
-            100,
-        )
-
-        self.cycle_progress.setValue(
-            0
-        )
-
-        cycle_layout.addWidget(
-            self.cycle_progress
-        )
-
-        # --------------------------------------------------------
-        # RUN
-        # --------------------------------------------------------
+        # Controls
+        controls = QHBoxLayout()
 
         self.run_cycle_button = QPushButton(
             "RUN CYCLE"
         )
-
         self.run_cycle_button.clicked.connect(
             self.run_cycle
         )
+        self.run_cycle_button.setEnabled(False)
 
-        self.run_cycle_button.setEnabled(
-            False
+        self.continue_cycle_button = QPushButton(
+            "CONTINUE"
         )
-
-        cycle_layout.addWidget(
-            self.run_cycle_button
+        self.continue_cycle_button.clicked.connect(
+            self.continue_cycle
         )
+        self.continue_cycle_button.setEnabled(False)
 
-        layout.addWidget(
-            cycle_box
+        self.stop_cycle_button = QPushButton(
+            "STOP CYCLE"
         )
+        self.stop_cycle_button.clicked.connect(
+            self.stop_cycle
+        )
+        self.stop_cycle_button.setEnabled(False)
 
+        controls.addWidget(self.run_cycle_button)
+        controls.addWidget(self.continue_cycle_button)
+        controls.addWidget(self.stop_cycle_button)
+
+        cycle_layout.addLayout(controls)
+
+        layout.addWidget(cycle_box)
         layout.addStretch()
 
     # ============================================================
@@ -692,21 +443,25 @@ class HelicoWindow(QMainWindow):
         *_,
     ):
 
+        if self.cycle_running:
+            return
+
         self.validated_cycle_names = []
 
-        self.run_cycle_button.setEnabled(
-            False
-        )
+        self.run_cycle_button.setEnabled(False)
+        self.continue_cycle_button.setEnabled(False)
+        self.stop_cycle_button.setEnabled(False)
 
-        self.cycle_progress.setValue(
-            0
-        )
+        self.cycle_progress.setValue(0)
 
         self.cycle_status_label.setText(
             "Cycle not validated."
         )
 
     def validate_cycle(self):
+
+        if self.cycle_running:
+            return
 
         trajectory_names = [
             box.currentText().strip()
@@ -728,10 +483,7 @@ class HelicoWindow(QMainWindow):
                 "INVALID: select at least two trajectories."
             )
 
-            self.run_cycle_button.setEnabled(
-                False
-            )
-
+            self.run_cycle_button.setEnabled(False)
             return
 
         if not self.node.inspect_trajectory_client.service_is_ready():
@@ -739,44 +491,32 @@ class HelicoWindow(QMainWindow):
             self.validated_cycle_names = []
 
             self.cycle_status_label.setText(
-                "Cannot validate: "
-                "trajectory inspection service is unavailable."
+                "Cannot validate: trajectory inspection "
+                "service is unavailable."
             )
 
-            self.run_cycle_button.setEnabled(
-                False
-            )
-
+            self.run_cycle_button.setEnabled(False)
             return
 
         self.cycle_status_label.setText(
             "Validating cycle..."
         )
 
-        self.run_cycle_button.setEnabled(
-            False
-        )
+        self.run_cycle_button.setEnabled(False)
 
         self.validated_cycle_names = []
-
-        self.pending_cycle_names = (
-            trajectory_names
-        )
-
+        self.pending_cycle_names = trajectory_names
         self.pending_cycle_details = {}
 
-        for index, name in enumerate(
-            trajectory_names
-        ):
+        for index, name in enumerate(trajectory_names):
 
             request = InspectTrajectory.Request()
-
             request.name = name
 
             future = (
-                self.node.inspect_trajectory_client.call_async(
-                    request
-                )
+                self.node
+                .inspect_trajectory_client
+                .call_async(request)
             )
 
             future.add_done_callback(
@@ -809,10 +549,7 @@ class HelicoWindow(QMainWindow):
                     f"INVALID: could not inspect '{name}'."
                 )
 
-                self.run_cycle_button.setEnabled(
-                    False
-                )
-
+                self.run_cycle_button.setEnabled(False)
                 return
 
             self.pending_cycle_details[index] = {
@@ -825,7 +562,6 @@ class HelicoWindow(QMainWindow):
                 len(self.pending_cycle_details)
                 == len(self.pending_cycle_names)
             ):
-
                 self.finish_cycle_validation()
 
         except Exception as error:
@@ -836,9 +572,7 @@ class HelicoWindow(QMainWindow):
                 f"Validation failed: {error}"
             )
 
-            self.run_cycle_button.setEnabled(
-                False
-            )
+            self.run_cycle_button.setEnabled(False)
 
     def finish_cycle_validation(self):
 
@@ -849,13 +583,8 @@ class HelicoWindow(QMainWindow):
             )
         ]
 
-        # --------------------------------------------------------
-        # CHECK TRAJECTORY CONTINUITY
-        # --------------------------------------------------------
-
-        for i in range(
-            len(ordered) - 1
-        ):
+        # Check continuity
+        for i in range(len(ordered) - 1):
 
             current = ordered[i]
             following = ordered[i + 1]
@@ -879,21 +608,12 @@ class HelicoWindow(QMainWindow):
                     f"{following['start_pose']}"
                 )
 
-                self.run_cycle_button.setEnabled(
-                    False
-                )
-
+                self.run_cycle_button.setEnabled(False)
                 return
-
-        # --------------------------------------------------------
-        # VALID CYCLE
-        # --------------------------------------------------------
 
         description = []
 
-        for i, trajectory in enumerate(
-            ordered
-        ):
+        for i, trajectory in enumerate(ordered):
 
             description.append(
                 f"{i + 1}. "
@@ -915,17 +635,22 @@ class HelicoWindow(QMainWindow):
             + "\n".join(description)
         )
 
-        self.run_cycle_button.setEnabled(
-            True
-        )
-
-        self.cycle_progress.setValue(
-            0
-        )
+        self.run_cycle_button.setEnabled(True)
+        self.cycle_progress.setValue(0)
 
     # ============================================================
     # CYCLE EXECUTION
     # ============================================================
+
+    def set_cycle_selection_enabled(
+        self,
+        enabled,
+    ):
+
+        self.validate_cycle_button.setEnabled(enabled)
+
+        for box in self.cycle_trajectory_boxes:
+            box.setEnabled(enabled)
 
     def run_cycle(self):
 
@@ -934,7 +659,6 @@ class HelicoWindow(QMainWindow):
             self.set_status(
                 "Validate the cycle before running."
             )
-
             return
 
         if not self.node.go_to_start_client.server_is_ready():
@@ -942,7 +666,6 @@ class HelicoWindow(QMainWindow):
             self.set_status(
                 "Go-to-start server is not running."
             )
-
             return
 
         if not self.node.execute_client.server_is_ready():
@@ -950,7 +673,6 @@ class HelicoWindow(QMainWindow):
             self.set_status(
                 "Execution server is not running."
             )
-
             return
 
         answer = QMessageBox.question(
@@ -963,25 +685,18 @@ class HelicoWindow(QMainWindow):
         if answer != QMessageBox.Yes:
             return
 
-        self.run_cycle_button.setEnabled(
-            False
-        )
-
-        self.validate_cycle_button.setEnabled(
-            False
-        )
-
-        for box in self.cycle_trajectory_boxes:
-
-            box.setEnabled(
-                False
-            )
-
-        self.cycle_progress.setValue(
-            0
-        )
-
+        self.cycle_running = True
+        self.cycle_paused = False
+        self.stop_cycle_requested = False
         self.cycle_current_index = 0
+
+        self.run_cycle_button.setEnabled(False)
+        self.continue_cycle_button.setEnabled(False)
+        self.stop_cycle_button.setEnabled(True)
+
+        self.set_cycle_selection_enabled(False)
+
+        self.cycle_progress.setValue(0)
 
         first_trajectory = (
             self.validated_cycle_names[0]
@@ -998,13 +713,12 @@ class HelicoWindow(QMainWindow):
         )
 
         goal = GoToTrajectoryStart.Goal()
-
-        goal.trajectory_name = (
-            first_trajectory
-        )
+        goal.trajectory_name = first_trajectory
 
         future = (
-            self.node.go_to_start_client.send_goal_async(
+            self.node
+            .go_to_start_client
+            .send_goal_async(
                 goal,
                 feedback_callback=self.cycle_motion_feedback,
             )
@@ -1037,7 +751,6 @@ class HelicoWindow(QMainWindow):
                 self.cycle_failed(
                     "Go-to-start request was rejected."
                 )
-
                 return
 
             result_future = (
@@ -1061,9 +774,7 @@ class HelicoWindow(QMainWindow):
 
         try:
 
-            result = (
-                future.result().result
-            )
+            result = future.result().result
 
             if not result.success:
 
@@ -1071,7 +782,10 @@ class HelicoWindow(QMainWindow):
                     "Could not reach cycle start: "
                     + result.message
                 )
+                return
 
+            if self.stop_cycle_requested:
+                self.cycle_stopped()
                 return
 
             self.execute_cycle_step()
@@ -1084,31 +798,33 @@ class HelicoWindow(QMainWindow):
 
     def execute_cycle_step(self):
 
+        if not self.cycle_running:
+            return
+
+        if self.stop_cycle_requested:
+            self.cycle_stopped()
+            return
+
         if (
             self.cycle_current_index
             >= len(self.validated_cycle_names)
         ):
-
             self.cycle_complete()
-
             return
+
+        self.cycle_paused = False
+        self.continue_cycle_button.setEnabled(False)
 
         name = self.validated_cycle_names[
             self.cycle_current_index
         ]
 
-        step_number = (
-            self.cycle_current_index + 1
-        )
-
-        total_steps = len(
-            self.validated_cycle_names
-        )
+        step_number = self.cycle_current_index + 1
+        total_steps = len(self.validated_cycle_names)
 
         self.cycle_status_label.setText(
             "RUNNING CYCLE\n\n"
-            f"Step {step_number} "
-            f"of {total_steps}\n"
+            f"Step {step_number} of {total_steps}\n"
             f"{name}"
         )
 
@@ -1118,22 +834,22 @@ class HelicoWindow(QMainWindow):
             f"'{name}'"
         )
 
+        # Progress shows completed steps only.
         progress = int(
             self.cycle_current_index
             / total_steps
             * 100
         )
 
-        self.cycle_progress.setValue(
-            progress
-        )
+        self.cycle_progress.setValue(progress)
 
         goal = ExecuteTrajectory.Goal()
-
         goal.trajectory_name = name
 
         future = (
-            self.node.execute_client.send_goal_async(
+            self.node
+            .execute_client
+            .send_goal_async(
                 goal,
                 feedback_callback=self.cycle_motion_feedback,
             )
@@ -1157,7 +873,6 @@ class HelicoWindow(QMainWindow):
                 self.cycle_failed(
                     "Trajectory execution was rejected."
                 )
-
                 return
 
             result_future = (
@@ -1181,9 +896,7 @@ class HelicoWindow(QMainWindow):
 
         try:
 
-            result = (
-                future.result().result
-            )
+            result = future.result().result
 
             if not result.success:
 
@@ -1191,18 +904,18 @@ class HelicoWindow(QMainWindow):
                     "Cycle stopped: "
                     + result.message
                 )
-
                 return
+
+            completed_name = (
+                self.validated_cycle_names[
+                    self.cycle_current_index
+                ]
+            )
 
             self.cycle_current_index += 1
 
-            completed = (
-                self.cycle_current_index
-            )
-
-            total = len(
-                self.validated_cycle_names
-            )
+            completed = self.cycle_current_index
+            total = len(self.validated_cycle_names)
 
             progress = int(
                 completed
@@ -1210,10 +923,48 @@ class HelicoWindow(QMainWindow):
                 * 100
             )
 
-            self.cycle_progress.setValue(
-                progress
-            )
+            self.cycle_progress.setValue(progress)
 
+            # Entire cycle has finished.
+            if completed >= total:
+                self.cycle_complete()
+                return
+
+            # STOP means stop at the next safe step boundary.
+            if self.stop_cycle_requested:
+                self.cycle_stopped()
+                return
+
+            # Optional operator pause at every step boundary.
+            if self.pause_each_step_checkbox.isChecked():
+
+                next_name = (
+                    self.validated_cycle_names[
+                        self.cycle_current_index
+                    ]
+                )
+
+                self.cycle_paused = True
+
+                self.continue_cycle_button.setEnabled(
+                    True
+                )
+
+                self.cycle_status_label.setText(
+                    "PAUSED\n\n"
+                    f"Step {completed} of {total} complete\n"
+                    f"{completed_name}\n\n"
+                    f"Next:\n{next_name}\n\n"
+                    "Press CONTINUE when ready."
+                )
+
+                self.set_status(
+                    f"Cycle paused after step {completed}."
+                )
+
+                return
+
+            # Automatic mode
             self.execute_cycle_step()
 
         except Exception as error:
@@ -1222,11 +973,65 @@ class HelicoWindow(QMainWindow):
                 f"Cycle execution failed: {error}"
             )
 
+    def continue_cycle(self):
+
+        if not self.cycle_running:
+            return
+
+        if not self.cycle_paused:
+            return
+
+        if self.stop_cycle_requested:
+            self.cycle_stopped()
+            return
+
+        self.cycle_paused = False
+
+        self.continue_cycle_button.setEnabled(
+            False
+        )
+
+        self.execute_cycle_step()
+
+    def stop_cycle(self):
+
+        if not self.cycle_running:
+            return
+
+        self.stop_cycle_requested = True
+
+        self.stop_cycle_button.setEnabled(
+            False
+        )
+
+        # If already paused at a step boundary, stop immediately.
+        if self.cycle_paused:
+
+            self.cycle_stopped()
+
+            return
+
+        # We do not cancel a trajectory in the middle.
+        # The currently executing trajectory is allowed to finish,
+        # then the cycle stops at the next validated boundary.
+        self.cycle_status_label.setText(
+            "STOP REQUESTED\n\n"
+            "The current motion will finish first.\n"
+            "The cycle will stop at the next step boundary."
+        )
+
+        self.set_status(
+            "Stop requested. Waiting for the current "
+            "trajectory to finish."
+        )
+
     def cycle_complete(self):
 
-        self.cycle_progress.setValue(
-            100
-        )
+        self.cycle_running = False
+        self.cycle_paused = False
+        self.stop_cycle_requested = False
+
+        self.cycle_progress.setValue(100)
 
         self.cycle_status_label.setText(
             "CYCLE COMPLETE"
@@ -1236,47 +1041,54 @@ class HelicoWindow(QMainWindow):
             "Experiment cycle completed successfully."
         )
 
-        self.run_cycle_button.setEnabled(
-            True
+        self.run_cycle_button.setEnabled(True)
+        self.continue_cycle_button.setEnabled(False)
+        self.stop_cycle_button.setEnabled(False)
+
+        self.set_cycle_selection_enabled(True)
+
+    def cycle_stopped(self):
+
+        self.cycle_running = False
+        self.cycle_paused = False
+        self.stop_cycle_requested = False
+
+        self.cycle_status_label.setText(
+            "CYCLE STOPPED\n\n"
+            "The robot is at a completed step boundary."
         )
 
-        self.validate_cycle_button.setEnabled(
-            True
+        self.set_status(
+            "Experiment cycle stopped."
         )
 
-        for box in self.cycle_trajectory_boxes:
+        self.run_cycle_button.setEnabled(True)
+        self.continue_cycle_button.setEnabled(False)
+        self.stop_cycle_button.setEnabled(False)
 
-            box.setEnabled(
-                True
-            )
+        self.set_cycle_selection_enabled(True)
 
     def cycle_failed(
         self,
         message,
     ):
 
+        self.cycle_running = False
+        self.cycle_paused = False
+        self.stop_cycle_requested = False
+
         self.cycle_status_label.setText(
             "CYCLE STOPPED\n\n"
             + message
         )
 
-        self.set_status(
-            message
-        )
+        self.set_status(message)
 
-        self.run_cycle_button.setEnabled(
-            True
-        )
+        self.run_cycle_button.setEnabled(True)
+        self.continue_cycle_button.setEnabled(False)
+        self.stop_cycle_button.setEnabled(False)
 
-        self.validate_cycle_button.setEnabled(
-            True
-        )
-
-        for box in self.cycle_trajectory_boxes:
-
-            box.setEnabled(
-                True
-            )
+        self.set_cycle_selection_enabled(True)
 
     # ============================================================
     # DEFAULT TRAJECTORY NAME
@@ -1297,7 +1109,6 @@ class HelicoWindow(QMainWindow):
         )
 
         if start and target:
-
             self.trajectory_name_entry.setText(
                 f"{start}_TO_{target}"
             )
@@ -1308,30 +1119,18 @@ class HelicoWindow(QMainWindow):
 
     def build_diagnostics_tab(self):
 
-        layout = QVBoxLayout(
-            self.diagnostics_tab
-        )
+        layout = QVBoxLayout(self.diagnostics_tab)
 
-        heading = QLabel(
-            "System Diagnostics"
-        )
-
+        heading = QLabel("System Diagnostics")
         heading.setStyleSheet(
-            "font-size: 20px; "
-            "font-weight: bold;"
+            "font-size: 20px; font-weight: bold;"
         )
-
-        layout.addWidget(
-            heading
-        )
+        layout.addWidget(heading)
 
         self.backend_status = QLabel(
             "Workbench Backend: checking..."
         )
-
-        layout.addWidget(
-            self.backend_status
-        )
+        layout.addWidget(self.backend_status)
 
         layout.addWidget(
             QLabel(
@@ -1351,7 +1150,6 @@ class HelicoWindow(QMainWindow):
     def spin_ros(self):
 
         if rclpy.ok():
-
             rclpy.spin_once(
                 self.node,
                 timeout_sec=0.0,
@@ -1402,9 +1200,7 @@ class HelicoWindow(QMainWindow):
         text,
     ):
 
-        self.status_label.setText(
-            text
-        )
+        self.status_label.setText(text)
 
     # ============================================================
     # REFRESH
@@ -1421,7 +1217,9 @@ class HelicoWindow(QMainWindow):
             return
 
         future = (
-            self.node.list_poses_client.call_async(
+            self.node
+            .list_poses_client
+            .call_async(
                 ListPoses.Request()
             )
         )
@@ -1439,13 +1237,8 @@ class HelicoWindow(QMainWindow):
 
             response = future.result()
 
-            names = list(
-                response.names
-            )
-
-            types = list(
-                response.types
-            )
+            names = list(response.names)
+            types = list(response.types)
 
             joint_poses = [
                 name
@@ -1455,31 +1248,20 @@ class HelicoWindow(QMainWindow):
             ]
 
             self.pose_list.clear()
-
-            self.pose_list.addItems(
-                names
-            )
+            self.pose_list.addItems(names)
 
             self.start_pose_box.clear()
-
-            self.start_pose_box.addItems(
-                joint_poses
-            )
+            self.start_pose_box.addItems(joint_poses)
 
             self.target_pose_box.clear()
-
-            self.target_pose_box.addItems(
-                names
-            )
+            self.target_pose_box.addItems(names)
 
             if "meca_zero" in joint_poses:
-
                 self.start_pose_box.setCurrentText(
                     "meca_zero"
                 )
 
             if "meca_demo" in names:
-
                 self.target_pose_box.setCurrentText(
                     "meca_demo"
                 )
@@ -1496,7 +1278,9 @@ class HelicoWindow(QMainWindow):
             return
 
         future = (
-            self.node.list_trajectories_client.call_async(
+            self.node
+            .list_trajectories_client
+            .call_async(
                 ListTrajectories.Request()
             )
         )
@@ -1514,49 +1298,31 @@ class HelicoWindow(QMainWindow):
 
             response = future.result()
 
-            names = list(
-                response.names
-            )
+            names = list(response.names)
 
-            # ----------------------------------------------------
-            # CONFIGURE TAB
-            # ----------------------------------------------------
-
+            # Configure tab
             self.trajectory_list.clear()
+            self.trajectory_list.addItems(names)
 
-            self.trajectory_list.addItems(
-                names
-            )
-
-            # ----------------------------------------------------
-            # OPERATE TAB
-            # ----------------------------------------------------
-
+            # Operate tab
             for box in self.cycle_trajectory_boxes:
 
-                current = (
-                    box.currentText()
-                )
+                current = box.currentText()
+
+                box.blockSignals(True)
 
                 box.clear()
-
                 box.addItem(
                     "-- select trajectory --"
                 )
-
-                box.addItems(
-                    names
-                )
+                box.addItems(names)
 
                 if current in names:
+                    box.setCurrentText(current)
 
-                    box.setCurrentText(
-                        current
-                    )
+                box.blockSignals(False)
 
-            self.set_status(
-                "Ready"
-            )
+            self.set_status("Ready")
 
         except Exception as error:
 
@@ -1570,13 +1336,8 @@ class HelicoWindow(QMainWindow):
 
     def plan_trajectory(self):
 
-        start_pose = (
-            self.start_pose_box.currentText()
-        )
-
-        target_pose = (
-            self.target_pose_box.currentText()
-        )
+        start_pose = self.start_pose_box.currentText()
+        target_pose = self.target_pose_box.currentText()
 
         trajectory_name = (
             self.trajectory_name_entry
@@ -1589,7 +1350,6 @@ class HelicoWindow(QMainWindow):
             self.set_status(
                 "Select a start pose."
             )
-
             return
 
         if not target_pose:
@@ -1597,7 +1357,6 @@ class HelicoWindow(QMainWindow):
             self.set_status(
                 "Select a target pose."
             )
-
             return
 
         if not trajectory_name:
@@ -1605,7 +1364,6 @@ class HelicoWindow(QMainWindow):
             self.set_status(
                 "Enter a trajectory name."
             )
-
             return
 
         if not self.node.plan_client.server_is_ready():
@@ -1613,22 +1371,13 @@ class HelicoWindow(QMainWindow):
             self.set_status(
                 "Planning server is not running."
             )
-
             return
 
         goal = PlanTrajectory.Goal()
 
-        goal.start_pose = (
-            start_pose
-        )
-
-        goal.target_pose = (
-            target_pose
-        )
-
-        goal.trajectory_name = (
-            trajectory_name
-        )
+        goal.start_pose = start_pose
+        goal.target_pose = target_pose
+        goal.trajectory_name = trajectory_name
 
         goal.num_candidates = (
             self.candidate_spinbox.value()
@@ -1639,13 +1388,8 @@ class HelicoWindow(QMainWindow):
             / 100.0
         )
 
-        goal.velocity_scaling = (
-            speed
-        )
-
-        goal.acceleration_scaling = (
-            speed
-        )
+        goal.velocity_scaling = speed
+        goal.acceleration_scaling = speed
 
         goal.minimum_required_clearance = (
             self.clearance_spinbox.value()
@@ -1657,9 +1401,7 @@ class HelicoWindow(QMainWindow):
         goal.weight_path_length = 0.2
         goal.weight_duration = 0.1
 
-        self.progress.setValue(
-            0
-        )
+        self.progress.setValue(0)
 
         self.set_status(
             "Sending planning request..."
@@ -1681,29 +1423,14 @@ class HelicoWindow(QMainWindow):
         feedback_msg,
     ):
 
-        feedback = (
-            feedback_msg.feedback
-        )
+        feedback = feedback_msg.feedback
+        self.set_status(feedback.status)
 
-        self.set_status(
-            feedback.status
-        )
-
-        status = (
-            feedback.status.lower()
-        )
-
-        # --------------------------------------------------------
-        # INITIALISATION
-        # --------------------------------------------------------
+        status = feedback.status.lower()
 
         if "initialising" in status:
 
             progress = 5
-
-        # --------------------------------------------------------
-        # CANDIDATE PLANNING
-        # --------------------------------------------------------
 
         elif (
             feedback.total_candidates > 0
@@ -1716,8 +1443,7 @@ class HelicoWindow(QMainWindow):
         ):
 
             total_steps = (
-                feedback.total_candidates
-                * 2
+                feedback.total_candidates * 2
             )
 
             candidate_index = max(
@@ -1726,16 +1452,12 @@ class HelicoWindow(QMainWindow):
             )
 
             if "planning candidate" in status:
-
                 completed_steps = (
                     candidate_index * 2
                 )
-
             else:
-
                 completed_steps = (
-                    candidate_index * 2
-                    + 1
+                    candidate_index * 2 + 1
                 )
 
             fraction = (
@@ -1744,13 +1466,8 @@ class HelicoWindow(QMainWindow):
             )
 
             progress = int(
-                5
-                + fraction * 80
+                5 + fraction * 80
             )
-
-        # --------------------------------------------------------
-        # FINAL PROCESSING
-        # --------------------------------------------------------
 
         elif "scoring" in status:
 
@@ -1768,10 +1485,7 @@ class HelicoWindow(QMainWindow):
             )
 
         self.progress.setValue(
-            min(
-                progress,
-                99,
-            )
+            min(progress, 99)
         )
 
     def plan_goal_response(
@@ -1781,16 +1495,13 @@ class HelicoWindow(QMainWindow):
 
         try:
 
-            goal_handle = (
-                future.result()
-            )
+            goal_handle = future.result()
 
             if not goal_handle.accepted:
 
                 self.set_status(
                     "Planning goal rejected."
                 )
-
                 return
 
             result_future = (
@@ -1814,15 +1525,11 @@ class HelicoWindow(QMainWindow):
 
         try:
 
-            result = (
-                future.result().result
-            )
+            result = future.result().result
 
             if result.success:
 
-                self.progress.setValue(
-                    100
-                )
+                self.progress.setValue(100)
 
                 self.set_status(
                     f"Planned "
@@ -1854,16 +1561,13 @@ class HelicoWindow(QMainWindow):
 
     def selected_trajectory(self):
 
-        item = (
-            self.trajectory_list.currentItem()
-        )
+        item = self.trajectory_list.currentItem()
 
         if item is None:
 
             self.set_status(
                 "Select a saved trajectory first."
             )
-
             return None
 
         return item.text()
@@ -1880,13 +1584,12 @@ class HelicoWindow(QMainWindow):
             return
 
         request = InspectTrajectory.Request()
-
         request.name = name
 
         future = (
-            self.node.inspect_trajectory_client.call_async(
-                request
-            )
+            self.node
+            .inspect_trajectory_client
+            .call_async(request)
         )
 
         future.add_done_callback(
@@ -1907,7 +1610,6 @@ class HelicoWindow(QMainWindow):
                 self.details_label.setText(
                     response.message
                 )
-
                 return
 
             clearance_pass = (
@@ -1927,52 +1629,38 @@ class HelicoWindow(QMainWindow):
                 f"{response.target_pose}\n\n"
 
                 f"PLANNING SETTINGS\n"
-
                 f"Speed scaling: "
                 f"{response.velocity_scaling * 100:.0f}%\n"
-
                 f"Acceleration scaling: "
                 f"{response.acceleration_scaling * 100:.0f}%\n"
-
                 f"Required clearance: "
                 f"{response.minimum_required_clearance * 1000:.1f} mm\n"
-
                 f"Candidates: "
                 f"{response.num_candidates}\n"
-
                 f"Planner: "
                 f"{response.planner_id}\n\n"
 
                 f"SCORING WEIGHTS\n"
-
                 f"Clearance: "
                 f"{response.weight_clearance:.2f}\n"
-
                 f"Smoothness: "
                 f"{response.weight_smoothness:.2f}\n"
-
                 f"Path length: "
                 f"{response.weight_path_length:.2f}\n"
-
                 f"Duration: "
                 f"{response.weight_duration:.2f}\n\n"
 
                 f"RESULT\n"
-
                 f"Minimum clearance: "
                 f"{response.minimum_clearance * 1000:.2f} mm "
                 f"[{clearance_status}]\n"
-
                 f"Closest objects: "
                 f"{response.closest_object_a} ↔ "
                 f"{response.closest_object_b}\n"
-
                 f"Smoothness: "
                 f"{response.smoothness:.6f}\n"
-
                 f"Path length: "
                 f"{response.path_length:.4f} rad\n"
-
                 f"Duration: "
                 f"{response.duration:.2f} s"
             )
@@ -1989,9 +1677,7 @@ class HelicoWindow(QMainWindow):
 
     def go_to_start(self):
 
-        name = (
-            self.selected_trajectory()
-        )
+        name = self.selected_trajectory()
 
         if name is None:
             return
@@ -2001,21 +1687,19 @@ class HelicoWindow(QMainWindow):
             self.set_status(
                 "Go-to-start server is not running."
             )
-
             return
 
         goal = GoToTrajectoryStart.Goal()
-
-        goal.trajectory_name = (
-            name
-        )
+        goal.trajectory_name = name
 
         self.set_status(
             f"Going to start of '{name}'..."
         )
 
         future = (
-            self.node.go_to_start_client.send_goal_async(
+            self.node
+            .go_to_start_client
+            .send_goal_async(
                 goal,
                 feedback_callback=self.motion_feedback,
             )
@@ -2031,9 +1715,7 @@ class HelicoWindow(QMainWindow):
 
     def execute_trajectory(self):
 
-        name = (
-            self.selected_trajectory()
-        )
+        name = self.selected_trajectory()
 
         if name is None:
             return
@@ -2053,21 +1735,19 @@ class HelicoWindow(QMainWindow):
             self.set_status(
                 "Execution server is not running."
             )
-
             return
 
         goal = ExecuteTrajectory.Goal()
-
-        goal.trajectory_name = (
-            name
-        )
+        goal.trajectory_name = name
 
         self.set_status(
             f"Executing '{name}'..."
         )
 
         future = (
-            self.node.execute_client.send_goal_async(
+            self.node
+            .execute_client
+            .send_goal_async(
                 goal,
                 feedback_callback=self.motion_feedback,
             )
@@ -2093,16 +1773,13 @@ class HelicoWindow(QMainWindow):
 
         try:
 
-            goal_handle = (
-                future.result()
-            )
+            goal_handle = future.result()
 
             if not goal_handle.accepted:
 
                 self.set_status(
                     "Motion goal rejected."
                 )
-
                 return
 
             result_future = (
@@ -2126,13 +1803,8 @@ class HelicoWindow(QMainWindow):
 
         try:
 
-            result = (
-                future.result().result
-            )
-
-            self.set_status(
-                result.message
-            )
+            result = future.result().result
+            self.set_status(result.message)
 
         except Exception as error:
 
@@ -2152,9 +1824,7 @@ class HelicoWindow(QMainWindow):
             "Pose name:",
         )
 
-        name = (
-            name.strip()
-        )
+        name = name.strip()
 
         if not ok or not name:
             return
@@ -2164,19 +1834,15 @@ class HelicoWindow(QMainWindow):
             self.set_status(
                 "Capture pose service is not ready."
             )
-
             return
 
         request = CapturePose.Request()
-
-        request.name = (
-            name
-        )
+        request.name = name
 
         future = (
-            self.node.capture_pose_client.call_async(
-                request
-            )
+            self.node
+            .capture_pose_client
+            .call_async(request)
         )
 
         future.add_done_callback(
@@ -2190,16 +1856,10 @@ class HelicoWindow(QMainWindow):
 
         try:
 
-            response = (
-                future.result()
-            )
-
-            self.set_status(
-                response.message
-            )
+            response = future.result()
+            self.set_status(response.message)
 
             if response.success:
-
                 self.refresh_poses()
 
         except Exception as error:
@@ -2214,21 +1874,16 @@ class HelicoWindow(QMainWindow):
 
     def delete_pose(self):
 
-        item = (
-            self.pose_list.currentItem()
-        )
+        item = self.pose_list.currentItem()
 
         if item is None:
 
             self.set_status(
                 "Select a pose to delete."
             )
-
             return
 
-        name = (
-            item.text()
-        )
+        name = item.text()
 
         answer = QMessageBox.question(
             self,
@@ -2241,15 +1896,12 @@ class HelicoWindow(QMainWindow):
             return
 
         request = DeletePose.Request()
-
-        request.name = (
-            name
-        )
+        request.name = name
 
         future = (
-            self.node.delete_pose_client.call_async(
-                request
-            )
+            self.node
+            .delete_pose_client
+            .call_async(request)
         )
 
         future.add_done_callback(
@@ -2263,16 +1915,10 @@ class HelicoWindow(QMainWindow):
 
         try:
 
-            response = (
-                future.result()
-            )
-
-            self.set_status(
-                response.message
-            )
+            response = future.result()
+            self.set_status(response.message)
 
             if response.success:
-
                 self.refresh_poses()
 
         except Exception as error:
@@ -2287,9 +1933,7 @@ class HelicoWindow(QMainWindow):
 
     def delete_trajectory(self):
 
-        name = (
-            self.selected_trajectory()
-        )
+        name = self.selected_trajectory()
 
         if name is None:
             return
@@ -2305,15 +1949,12 @@ class HelicoWindow(QMainWindow):
             return
 
         request = DeleteTrajectory.Request()
-
-        request.name = (
-            name
-        )
+        request.name = name
 
         future = (
-            self.node.delete_trajectory_client.call_async(
-                request
-            )
+            self.node
+            .delete_trajectory_client
+            .call_async(request)
         )
 
         future.add_done_callback(
@@ -2327,13 +1968,8 @@ class HelicoWindow(QMainWindow):
 
         try:
 
-            response = (
-                future.result()
-            )
-
-            self.set_status(
-                response.message
-            )
+            response = future.result()
+            self.set_status(response.message)
 
             if response.success:
 
@@ -2355,36 +1991,24 @@ def main():
     rclpy.init()
 
     node = HelicoRosNode()
+    app = QApplication(sys.argv)
 
-    app = QApplication(
-        sys.argv
-    )
-
-    window = HelicoWindow(
-        node
-    )
-
+    window = HelicoWindow(node)
     window.show()
 
     try:
 
-        exit_code = (
-            app.exec()
-        )
+        exit_code = app.exec()
 
     finally:
 
         node.destroy_node()
 
         if rclpy.ok():
-
             rclpy.shutdown()
 
-    sys.exit(
-        exit_code
-    )
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":
-
     main()
