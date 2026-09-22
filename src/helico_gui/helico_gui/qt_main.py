@@ -61,6 +61,8 @@ class HelicoRosNode(Node):
         super().__init__(
             "helico_qt_gui"
         )
+        
+        self.cycle_started_logging = False
 
         # ========================================================
         # POSE SERVICES
@@ -1455,6 +1457,12 @@ class HelicoWindow(QMainWindow):
 
         if answer != QMessageBox.Yes:
             return
+            
+        if not self.logging_active:
+            self.start_logging()
+            self.cycle_started_logging = True
+        else:
+            self.cycle_started_logging = False
 
         self.cycle_running = True
 
@@ -1948,6 +1956,13 @@ class HelicoWindow(QMainWindow):
         self.set_cycle_selection_enabled(
             True
         )
+        
+        if self.logging_active:
+            self.stop_logging()
+            
+        if self.cycle_started_logging:
+            self.stop_logging()
+            self.cycle_started_logging = False
 
     def cycle_stopped(self):
 
@@ -1984,6 +1999,13 @@ class HelicoWindow(QMainWindow):
         self.set_cycle_selection_enabled(
             True
         )
+        
+        if self.logging_active:
+            self.stop_logging()
+        
+        if self.cycle_started_logging:
+            self.stop_logging() 
+            self.cycle_started_logging = False  
 
     def cycle_failed(
         self,
@@ -2022,6 +2044,13 @@ class HelicoWindow(QMainWindow):
         self.set_cycle_selection_enabled(
             True
         )
+        
+        if self.logging_active:
+            self.stop_logging()
+            
+        if self.cycle_started_logging:
+            self.stop_logging()
+            self.cycle_started_logging = False
 
     # ============================================================
     # DATA LOGGING
