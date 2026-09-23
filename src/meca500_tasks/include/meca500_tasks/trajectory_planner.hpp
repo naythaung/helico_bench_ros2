@@ -45,10 +45,17 @@ namespace meca500_tasks
     };
 
     using PlanningFeedbackCallback =
-        std::function<void(
-            int current_candidate,
-            int total_candidates,
-            const std::string &status)>;
+    std::function<void(
+        int current_candidate,
+        int total_candidates,
+        const std::string &status,
+        bool candidate_complete,
+        bool candidate_passed,
+        double minimum_clearance,
+        double smoothness,
+        double path_length,
+        double duration,
+        const std::string &candidate_message)>;
 
     PlanningResult planTrajectory(
         const std::shared_ptr<rclcpp::Node> &node,

@@ -15,13 +15,16 @@ public:
         meca500_interfaces::action::PlanTrajectory;
 
     using GoalHandlePlanTrajectory =
-        rclcpp_action::ServerGoalHandle<PlanTrajectory>;
+        rclcpp_action::ServerGoalHandle<
+            PlanTrajectory>;
 
     PlanTrajectoryServer()
-        : Node("meca500_plan_trajectory_server")
+        : Node(
+              "meca500_plan_trajectory_server")
     {
         action_server_ =
-            rclcpp_action::create_server<PlanTrajectory>(
+            rclcpp_action::create_server<
+                PlanTrajectory>(
                 this,
                 "/meca/plan_trajectory",
 
@@ -49,7 +52,9 @@ public:
 private:
     rclcpp_action::GoalResponse handleGoal(
         const rclcpp_action::GoalUUID &,
-        std::shared_ptr<const PlanTrajectory::Goal> goal)
+        std::shared_ptr<
+            const PlanTrajectory::Goal>
+            goal)
     {
         RCLCPP_INFO(
             this->get_logger(),
@@ -57,18 +62,23 @@ private:
             goal->start_pose.c_str(),
             goal->target_pose.c_str());
 
-        if (goal->start_pose.empty() ||
+        if (
+            goal->start_pose.empty() ||
             goal->target_pose.empty() ||
             goal->trajectory_name.empty())
         {
             RCLCPP_WARN(
                 this->get_logger(),
-                "Rejected planning goal: missing required name.");
+                "Rejected planning goal: "
+                "missing required name.");
 
-            return rclcpp_action::GoalResponse::REJECT;
+            return rclcpp_action::
+                GoalResponse::REJECT;
         }
 
-        return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+        return rclcpp_action::
+            GoalResponse::
+                ACCEPT_AND_EXECUTE;
     }
 
     rclcpp_action::CancelResponse handleCancel(
@@ -79,7 +89,8 @@ private:
             this->get_logger(),
             "Received request to cancel planning.");
 
-        return rclcpp_action::CancelResponse::ACCEPT;
+        return rclcpp_action::
+            CancelResponse::ACCEPT;
     }
 
     void handleAccepted(
@@ -90,7 +101,8 @@ private:
         std::thread(
             [this, goal_handle]()
             {
-                execute(goal_handle);
+                execute(
+                    goal_handle);
             })
             .detach();
     }
@@ -107,7 +119,8 @@ private:
             std::make_shared<
                 PlanTrajectory::Result>();
 
-        meca500_tasks::PlanningRequest request;
+        meca500_tasks::
+            PlanningRequest request;
 
         request.start_pose =
             goal->start_pose;
@@ -146,7 +159,15 @@ private:
             [goal_handle](
                 int current_candidate,
                 int total_candidates,
-                const std::string &status)
+                const std::string &status,
+                bool candidate_complete,
+                bool candidate_passed,
+                double minimum_clearance,
+                double smoothness,
+                double path_length,
+                double duration,
+                const std::string &
+                    candidate_message)
         {
             auto feedback =
                 std::make_shared<
@@ -160,6 +181,27 @@ private:
 
             feedback->status =
                 status;
+
+            feedback->candidate_complete =
+                candidate_complete;
+
+            feedback->candidate_passed =
+                candidate_passed;
+
+            feedback->minimum_clearance =
+                minimum_clearance;
+
+            feedback->smoothness =
+                smoothness;
+
+            feedback->path_length =
+                path_length;
+
+            feedback->duration =
+                duration;
+
+            feedback->candidate_message =
+                candidate_message;
 
             goal_handle->publish_feedback(
                 feedback);
@@ -187,18 +229,27 @@ private:
             planning_result.weighted_cost;
 
         result->minimum_clearance =
-            planning_result.metrics.minimum_clearance;
+            planning_result
+                .metrics
+                .minimum_clearance;
 
         result->smoothness =
-            planning_result.metrics.smoothness;
+            planning_result
+                .metrics
+                .smoothness;
 
         result->path_length =
-            planning_result.metrics.path_length;
+            planning_result
+                .metrics
+                .path_length;
 
         result->duration =
-            planning_result.metrics.duration;
+            planning_result
+                .metrics
+                .duration;
 
-        if (planning_result.success)
+        if (
+            planning_result.success)
         {
             goal_handle->succeed(
                 result);
@@ -215,7 +266,9 @@ private:
         action_server_;
 };
 
-int main(int argc, char **argv)
+int main(
+    int argc,
+    char **argv)
 {
     rclcpp::init(
         argc,

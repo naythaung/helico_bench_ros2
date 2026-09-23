@@ -264,7 +264,14 @@ namespace meca500_tasks
                 feedback_callback(
                     0,
                     request.num_candidates,
-                    "Initialising MoveIt");
+                    "Initialising MoveIt",
+                    false,
+                    false,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    "");
             }
 
             if (request.velocity_scaling <= 0.0 ||
@@ -419,7 +426,14 @@ namespace meca500_tasks
                         i + 1,
                         request.num_candidates,
                         "Planning candidate " +
-                            std::to_string(i + 1));
+                            std::to_string(i + 1),
+                        false,
+                        false,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        "");
                 }
 
                 MoveGroupInterface::Plan
@@ -437,6 +451,23 @@ namespace meca500_tasks
                         "Candidate %d | PLANNING FAILED",
                         i + 1);
 
+                    if (feedback_callback)
+                    {
+                        feedback_callback(
+                            i + 1,
+                            request.num_candidates,
+                            "Candidate " +
+                                std::to_string(i + 1) +
+                                " failed",
+                            true,
+                            false,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            "Planning failed");
+                    }
+
                     continue;
                 }
 
@@ -453,7 +484,14 @@ namespace meca500_tasks
                         i + 1,
                         request.num_candidates,
                         "Evaluating candidate " +
-                            std::to_string(i + 1));
+                            std::to_string(i + 1),
+                        false,
+                        false,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        "");
                 }
 
                 planning_scene_monitor::
@@ -468,6 +506,25 @@ namespace meca500_tasks
                 const bool is_safe =
                     metrics.minimum_clearance >
                     request.minimum_required_clearance;
+
+                if (feedback_callback)
+                {
+                    feedback_callback(
+                        i + 1,
+                        request.num_candidates,
+                        is_safe
+                            ? "Candidate passed"
+                            : "Candidate rejected",
+                        true,
+                        is_safe,
+                        metrics.minimum_clearance,
+                        metrics.smoothness,
+                        metrics.path_length,
+                        metrics.duration,
+                        is_safe
+                            ? "Passed clearance gate"
+                            : "Below minimum clearance");
+                }
 
                 RCLCPP_INFO(
                     logger,
@@ -640,7 +697,14 @@ namespace meca500_tasks
                 feedback_callback(
                     request.num_candidates,
                     request.num_candidates,
-                    "Scoring candidates");
+                    "Scoring candidates",
+                    false,
+                    false,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    "");
             }
 
             for (auto &candidate :
@@ -719,7 +783,14 @@ namespace meca500_tasks
                 feedback_callback(
                     request.num_candidates,
                     request.num_candidates,
-                    "Saving selected trajectory");
+                    "Saving selected trajectory",
+                    false,
+                    false,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    "");
             }
 
             const bool saved =
