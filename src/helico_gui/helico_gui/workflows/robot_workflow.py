@@ -109,32 +109,120 @@ class RobotWorkflowMixin:
         goal.weight_path_length = 0.2
         goal.weight_duration = 0.1
         self.progress.setValue(0)
-        self.set_status('Sending planning request...')
+
+        self.planning_candidate_label.setText(
+            f'Preparing {goal.num_candidates} candidates...'
+        )
+
+        self.set_status(
+            'Sending planning request...'
+        )
         future = self.node.plan_client.send_goal_async(goal, feedback_callback=self.plan_feedback)
         future.add_done_callback(self.plan_goal_response)
 
-    def plan_feedback(self, feedback_msg):
-        feedback = feedback_msg.feedback
-        self.set_status(feedback.status)
-        status = feedback.status.lower()
-        if 'initialising' in status:
-            progress = 5
-        elif feedback.total_candidates > 0 and ('planning candidate' in status or 'evaluating candidate' in status):
-            total_steps = feedback.total_candidates * 2
-            candidate_index = max(feedback.current_candidate - 1, 0)
-            if 'planning candidate' in status:
-                completed_steps = candidate_index * 2
+    def plan_feedback(
+            self,
+            feedback_msg,
+        ):
+
+            feedback = feedback_msg.feedback
+
+            self.set_status(
+                feedback.status
+            )
+
+            status = feedback.status.lower()
+
+            if (
+                feedback.total_candidates > 0
+                and
+                feedback.current_candidate > 0
+            ):
+                self.planning_candidate_label.setText(
+                    f'Candidate '
+                    f'{feedback.current_candidate} / '
+                    f'{feedback.total_candidates}\n'
+                    f'{feedback.status}'
+                )
             else:
-                completed_steps = candidate_index * 2 + 1
-            fraction = completed_steps / total_steps
-            progress = int(5 + fraction * 80)
-        elif 'scoring' in status:
-            progress = 90
-        elif 'saving' in status:
-            progress = 97
-        else:
-            progress = min(self.progress.value(), 99)
-        self.progress.setValue(min(progress, 99))
+                self.planning_candidate_label.setText(
+                    feedback.status
+                )
+
+            if 'initialising' in status:
+
+                progress = 5
+
+            elif (
+                feedback.total_candidates > 0
+                and
+                (
+                    'planning candidate' in status
+                    or
+                    'evaluating candidate' in status
+                )
+            ):
+
+                total_steps = (
+                    feedback.total_candidates * 2
+                )
+
+                candidate_index = max(
+                    feedback.current_candidate - 1,
+                    0,
+                )
+
+                if 'planning candidate' in status:
+
+                    completed_steps = (
+                        candidate_index * 2
+                    )
+
+                else:
+
+                    completed_steps = (
+                        candidate_index * 2 + 1
+                    )
+
+                fraction = (
+                    completed_steps
+                    /
+                    total_steps
+                )
+
+                progress = int(
+                    5 + fraction * 80
+                )
+
+            elif 'scoring' in status:
+
+                progress = 90
+
+                self.planning_candidate_label.setText(
+                    'Comparing successful candidates...'
+                )
+
+            elif 'saving' in status:
+
+                progress = 97
+
+                self.planning_candidate_label.setText(
+                    'Saving selected candidate...'
+                )
+
+            else:
+
+                progress = min(
+                    self.progress.value(),
+                    99,
+                )
+
+            self.progress.setValue(
+                min(
+                    progress,
+                    99,
+                )
+            )
 
     def plan_goal_response(self, future):
         try:
@@ -147,17 +235,72 @@ class RobotWorkflowMixin:
         except Exception as error:
             self.set_status(f'Planning request failed: {error}')
 
-    def plan_result(self, future):
-        try:
-            result = future.result().result
-            if result.success:
-                self.progress.setValue(100)
-                self.set_status(f"Planned '{result.trajectory_name}' | candidate {result.selected_candidate} | clearance {result.minimum_clearance * 1000:.1f} mm")
-                self.refresh_trajectories()
-            else:
-                self.set_status('Planning failed: ' + result.message)
-        except Exception as error:
-            self.set_status(f'Planning result failed: {error}')
+    def plan_result(
+            self,
+            future,
+        ):
+
+            try:
+
+                result = (
+                    future
+                    .result()
+                    .result
+                )
+
+                if result.success:
+
+                    self.progress.setValue(
+                        100
+                    )
+
+                    self.planning_candidate_label.setText(
+                        f'SELECTED CANDIDATE '
+                        f'{result.selected_candidate}\n\n'
+                        f'Weighted cost: '
+                        f'{result.weighted_cost:.4f}\n'
+                        f'Clearance: '
+                        f'{result.minimum_clearance * 1000:.1f} mm\n'
+                        f'Smoothness: '
+                        f'{result.smoothness:.6f}\n'
+                        f'Path length: '
+                        f'{result.path_length:.3f} rad\n'
+                        f'Duration: '
+                        f'{result.duration:.2f} s'
+                    )
+
+                    self.set_status(
+                        f"Planned "
+                        f"'{result.trajectory_name}' "
+                        f"| candidate "
+                        f"{result.selected_candidate}"
+                    )
+
+                    self.refresh_trajectories()
+
+                else:
+
+                    self.planning_candidate_label.setText(
+                        'PLANNING FAILED\n\n'
+                        + result.message
+                    )
+
+                    self.set_status(
+                        'Planning failed: '
+                        + result.message
+                    )
+
+            except Exception as error:
+
+                self.planning_candidate_label.setText(
+                    f'Planning result error:\n'
+                    f'{error}'
+                )
+
+                self.set_status(
+                    f'Planning result failed: '
+                    f'{error}'
+                )
 
     def selected_trajectory(self):
         item = self.trajectory_list.currentItem()

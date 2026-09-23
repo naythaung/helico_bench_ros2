@@ -149,11 +149,41 @@ class CycleWorkflowMixin:
         self.run_cycle_button.setEnabled(True)
         self.cycle_progress.setValue(0)
 
-    def set_cycle_selection_enabled(self, enabled):
-        self.validate_cycle_button.setEnabled(enabled)
-        for box in self.cycle_trajectory_boxes:
-            box.setEnabled(enabled)
+    def set_cycle_selection_enabled(
+            self,
+            enabled,
+        ):
 
+            self.validate_cycle_button.setEnabled(
+                enabled
+            )
+
+            self.add_cycle_step_button.setEnabled(
+                enabled
+            )
+
+            for box in self.cycle_trajectory_boxes:
+
+                box.setEnabled(
+                    enabled
+                )
+
+            can_remove = (
+                enabled
+                and
+                len(
+                    self.cycle_step_rows
+                )
+                >
+                2
+            )
+
+            for row in self.cycle_step_rows:
+
+                row["remove"].setEnabled(
+                    can_remove
+                )
+    
     def run_cycle(self):
         if not self.validated_cycle_names:
             self.set_status("Validate the cycle before running.")
@@ -176,9 +206,18 @@ class CycleWorkflowMixin:
         if answer != QMessageBox.Yes:
             return
 
-        if not self.logging_active:
-            self.cycle_started_logging = self.start_logging()
+        if (
+            self.record_cycle_checkbox.isChecked()
+            and
+            not self.logging_active
+        ):
+
+            self.cycle_started_logging = (
+                self.start_logging()
+            )
+
         else:
+
             self.cycle_started_logging = False
 
         self.cycle_running = True

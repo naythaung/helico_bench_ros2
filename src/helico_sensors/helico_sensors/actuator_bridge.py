@@ -34,7 +34,7 @@ class HelicoActuatorBridge(Node):
 
         self.declare_parameter(
             "reconnect_interval",
-            1.0,
+            5.0,
         )
 
         self.declare_parameter(

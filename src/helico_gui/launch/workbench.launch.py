@@ -57,6 +57,38 @@ def generate_launch_description():
     )
 
     # ---------------------------------------------------------
+    # Bench sensor controller
+    # ---------------------------------------------------------
+
+    sensor_bridge = Node(
+        package="helico_sensors",
+        executable="serial_bridge",
+        name="helico_sensor_bridge",
+        output="screen",
+        parameters=[
+            {
+                "port": "auto",
+            }
+        ],
+    )
+
+    # ---------------------------------------------------------
+    # Helico controller
+    # ---------------------------------------------------------
+
+    actuator_bridge = Node(
+        package="helico_sensors",
+        executable="actuator_bridge",
+        name="helico_actuator_bridge",
+        output="screen",
+        parameters=[
+            {
+                "port": "auto",
+            }
+        ],
+    )
+
+    # ---------------------------------------------------------
     # GUI
     # ---------------------------------------------------------
 
@@ -72,6 +104,8 @@ def generate_launch_description():
             planning_server,
             execution_server,
             workbench_server,
+            sensor_bridge,
+            actuator_bridge,
             gui,
         ]
     )

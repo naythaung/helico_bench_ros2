@@ -31,3 +31,13 @@ float64 duration
 int32 current_candidate
 int32 total_candidates
 string status
+
+bool candidate_complete
+bool candidate_passed
+
+float64 minimum_clearance
+float64 smoothness
+float64 path_length
+float64 duration
+
+string candidate_message

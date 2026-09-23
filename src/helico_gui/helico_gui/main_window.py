@@ -145,6 +145,23 @@ class HelicoWindow(
         self.progress.setRange(0, 100)
         self.progress.setValue(0)
         planning_form.addRow('Progress', self.progress)
+        
+        self.planning_candidate_label = QLabel(
+            'No planning run yet.'
+        )
+        self.planning_candidate_label.setWordWrap(True)
+
+        self.planning_candidate_label.setStyleSheet(
+            'padding: 10px; '
+            'border: 1px solid #888; '
+            'border-radius: 6px;'
+        )
+
+        planning_form.addRow(
+            'Planning result',
+            self.planning_candidate_label,
+        )
+        
         left.addWidget(planning_box)
         pose_box = QGroupBox('Pose Library')
         pose_layout = QVBoxLayout(pose_box)
@@ -198,16 +215,31 @@ class HelicoWindow(
         cycle_box = QGroupBox('Experiment Cycle')
         cycle_layout = QVBoxLayout(cycle_box)
         self.cycle_trajectory_boxes = []
-        for i in range(4):
-            row = QHBoxLayout()
-            label = QLabel(f'Step {i + 1}')
-            trajectory_box = QComboBox()
-            trajectory_box.addItem('-- select trajectory --')
-            trajectory_box.currentTextChanged.connect(self.invalidate_cycle_validation)
-            self.cycle_trajectory_boxes.append(trajectory_box)
-            row.addWidget(label)
-            row.addWidget(trajectory_box)
-            cycle_layout.addLayout(row)
+        self.cycle_step_rows = []
+
+        self.cycle_steps_layout = QVBoxLayout()
+
+        cycle_layout.addLayout(
+            self.cycle_steps_layout
+        )
+
+        for _ in range(4):
+
+            self.add_cycle_step(
+                invalidate=False
+            )
+
+        self.add_cycle_step_button = QPushButton(
+            "+ ADD STEP"
+        )
+
+        self.add_cycle_step_button.clicked.connect(
+            self.add_cycle_step
+        )
+
+        cycle_layout.addWidget(
+            self.add_cycle_step_button
+        )
         self.validate_cycle_button = QPushButton('VALIDATE CYCLE')
         self.validate_cycle_button.clicked.connect(self.validate_cycle)
         cycle_layout.addWidget(self.validate_cycle_button)
@@ -238,6 +270,19 @@ class HelicoWindow(
         layout.addWidget(cycle_box)
         logging_box = QGroupBox('Experiment Data Logging')
         logging_layout = QVBoxLayout(logging_box)
+        
+        self.record_cycle_checkbox = QCheckBox(
+            "Record data during cycle"
+        )
+
+        self.record_cycle_checkbox.setChecked(
+            True
+        )
+
+        logging_layout.addWidget(
+            self.record_cycle_checkbox
+        )
+        
         self.logging_status_label = QLabel('Logging: OFF')
         self.logging_status_label.setStyleSheet('font-weight: bold;')
         logging_layout.addWidget(self.logging_status_label)
@@ -255,6 +300,184 @@ class HelicoWindow(
         logging_layout.addLayout(logging_buttons)
         layout.addWidget(logging_box)
         layout.addStretch()
+        
+    # ============================================================
+    # EXPERIMENT CYCLE STEP EDITOR
+    # ============================================================
+
+    def available_trajectory_names(self):
+
+        return [
+            self.trajectory_list.item(index).text()
+            for index in range(
+                self.trajectory_list.count()
+            )
+        ]
+
+    def add_cycle_step(
+        self,
+        checked=False,
+        invalidate=True,
+    ):
+
+        if self.cycle_running:
+            return
+
+        row_widget = QWidget()
+
+        row_layout = QHBoxLayout(
+            row_widget
+        )
+
+        row_layout.setContentsMargins(
+            0,
+            0,
+            0,
+            0,
+        )
+
+        step_label = QLabel()
+
+        trajectory_box = QComboBox()
+
+        trajectory_box.addItem(
+            "-- select trajectory --"
+        )
+
+        trajectory_box.addItems(
+            self.available_trajectory_names()
+        )
+
+        trajectory_box.currentTextChanged.connect(
+            self.invalidate_cycle_validation
+        )
+
+        remove_button = QPushButton(
+            "REMOVE"
+        )
+
+        remove_button.clicked.connect(
+            lambda checked=False,
+            widget=row_widget:
+            self.remove_cycle_step(widget)
+        )
+
+        row_layout.addWidget(
+            step_label
+        )
+
+        row_layout.addWidget(
+            trajectory_box,
+            1,
+        )
+
+        row_layout.addWidget(
+            remove_button
+        )
+
+        row_data = {
+            "widget": row_widget,
+            "label": step_label,
+            "box": trajectory_box,
+            "remove": remove_button,
+        }
+
+        self.cycle_step_rows.append(
+            row_data
+        )
+
+        self.cycle_trajectory_boxes.append(
+            trajectory_box
+        )
+
+        self.cycle_steps_layout.addWidget(
+            row_widget
+        )
+
+        self.update_cycle_step_rows()
+
+        if (
+            invalidate
+            and
+            hasattr(
+                self,
+                "run_cycle_button",
+            )
+        ):
+
+            self.invalidate_cycle_validation()
+
+    def remove_cycle_step(
+        self,
+        row_widget,
+    ):
+
+        if self.cycle_running:
+            return
+
+        if len(
+            self.cycle_step_rows
+        ) <= 2:
+
+            self.set_status(
+                "An experiment cycle requires "
+                "at least two steps."
+            )
+
+            return
+
+        for index, row in enumerate(
+            self.cycle_step_rows
+        ):
+
+            if (
+                row["widget"]
+                is row_widget
+            ):
+
+                self.cycle_step_rows.pop(
+                    index
+                )
+
+                self.cycle_trajectory_boxes.pop(
+                    index
+                )
+
+                row_widget.setParent(
+                    None
+                )
+
+                row_widget.deleteLater()
+
+                break
+
+        self.update_cycle_step_rows()
+
+        self.invalidate_cycle_validation()
+
+    def update_cycle_step_rows(self):
+
+        can_remove = (
+            len(
+                self.cycle_step_rows
+            )
+            >
+            2
+        )
+
+        for index, row in enumerate(
+            self.cycle_step_rows
+        ):
+
+            row["label"].setText(
+                f"Step {index + 1}"
+            )
+
+            row["remove"].setEnabled(
+                can_remove
+                and
+                not self.cycle_running
+            )
 
     def sensor_is_recent(self, timestamp, timeout=1.0):
         if timestamp is None:
