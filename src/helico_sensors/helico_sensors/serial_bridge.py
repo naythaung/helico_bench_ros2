@@ -1,11 +1,17 @@
-import os
 import time
 
 import serial
 
 import rclpy
+
 from rclpy.node import Node
+
 from std_msgs.msg import Float64
+
+from helico_sensors.serial_discovery import (
+    discover_serial_device,
+    open_serial,
+)
 
 
 class HelicoSensorBridge(Node):
@@ -18,7 +24,7 @@ class HelicoSensorBridge(Node):
 
         self.declare_parameter(
             "port",
-            "/dev/ttyUSB0",
+            "auto",
         )
 
         self.declare_parameter(
@@ -36,7 +42,7 @@ class HelicoSensorBridge(Node):
             3.0,
         )
 
-        self.port_name = (
+        self.configured_port = (
             self.get_parameter("port")
             .get_parameter_value()
             .string_value
@@ -49,20 +55,27 @@ class HelicoSensorBridge(Node):
         )
 
         self.reconnect_interval = (
-            self.get_parameter("reconnect_interval")
+            self.get_parameter(
+                "reconnect_interval"
+            )
             .get_parameter_value()
             .double_value
         )
 
         self.data_timeout = (
-            self.get_parameter("data_timeout")
+            self.get_parameter(
+                "data_timeout"
+            )
             .get_parameter_value()
             .double_value
         )
 
         self.serial_port = None
 
+        self.connected_port = None
+
         self.last_connect_attempt = 0.0
+
         self.last_valid_data_time = None
 
         self.laser_publisher = (
@@ -87,71 +100,115 @@ class HelicoSensorBridge(Node):
         )
 
         self.get_logger().info(
-            f"Bench sensor bridge started. "
-            f"Port: {self.port_name}"
+            "Bench sensor bridge started. "
+            f"Port: {self.configured_port}"
         )
 
         self.connect_serial()
 
-    def port_exists(self):
-
-        return os.path.exists(
-            self.port_name
-        )
+    # ============================================================
+    # CONNECTION
+    # ============================================================
 
     def connect_serial(self):
 
         if self.serial_port is not None:
+
             return
 
         now = time.monotonic()
 
         if (
-            now - self.last_connect_attempt
+            now
+            -
+            self.last_connect_attempt
             <
             self.reconnect_interval
         ):
+
             return
 
         self.last_connect_attempt = now
 
-        if not self.port_exists():
-            return
-
-        try:
-
-            serial_port = serial.Serial(
-                self.port_name,
-                self.baud_rate,
-                timeout=0.05,
-            )
-
-            serial_port.reset_input_buffer()
-
-            self.serial_port = serial_port
-
-            self.last_valid_data_time = (
-                time.monotonic()
-            )
+        if (
+            self.configured_port
+            ==
+            "auto"
+        ):
 
             self.get_logger().info(
-                f"Bench sensor controller connected: "
-                f"{self.port_name}"
+                "Searching for bench sensor "
+                "controller..."
             )
 
-        except (
-            serial.SerialException,
-            OSError,
-        ) as error:
-
-            self.serial_port = None
-
-            self.get_logger().warning(
-                f"Could not connect to bench "
-                f"sensor controller on "
-                f"{self.port_name}: "
-                f"{error}"
+            (
+                port_name,
+                serial_port,
+            ) = discover_serial_device(
+                baud_rate=self.baud_rate,
+                role="bench",
             )
+
+            if serial_port is None:
+
+                return
+
+            self.connected_port = (
+                port_name
+            )
+
+            self.serial_port = (
+                serial_port
+            )
+
+        else:
+
+            try:
+
+                self.serial_port = (
+                    open_serial(
+                        self.configured_port,
+                        self.baud_rate,
+                        timeout=0.05,
+                    )
+                )
+
+                self.connected_port = (
+                    self.configured_port
+                )
+
+                time.sleep(
+                    1.0
+                )
+
+                self.serial_port.reset_input_buffer()
+
+            except (
+                serial.SerialException,
+                OSError,
+            ) as error:
+
+                self.serial_port = None
+                self.connected_port = None
+
+                self.get_logger().warning(
+                    "Could not connect to "
+                    "bench sensor controller "
+                    f"on {self.configured_port}: "
+                    f"{error}"
+                )
+
+                return
+
+        self.last_valid_data_time = (
+            time.monotonic()
+        )
+
+        self.get_logger().info(
+            "Bench sensor controller "
+            "connected: "
+            f"{self.connected_port}"
+        )
 
     def disconnect_serial(
         self,
@@ -163,13 +220,22 @@ class HelicoSensorBridge(Node):
             try:
 
                 if self.serial_port.is_open:
+
                     self.serial_port.close()
 
             except Exception:
+
                 pass
 
         self.serial_port = None
+
         self.last_valid_data_time = None
+
+        old_port = (
+            self.connected_port
+        )
+
+        self.connected_port = None
 
         self.last_connect_attempt = (
             time.monotonic()
@@ -178,9 +244,11 @@ class HelicoSensorBridge(Node):
         if reason:
 
             self.get_logger().warning(
-                f"Bench sensor controller "
-                f"disconnected: {reason}. "
-                f"Waiting for reconnection..."
+                "Bench sensor controller "
+                f"disconnected from "
+                f"{old_port}: "
+                f"{reason}. "
+                "Searching for reconnection..."
             )
 
         else:
@@ -188,21 +256,18 @@ class HelicoSensorBridge(Node):
             self.get_logger().warning(
                 "Bench sensor controller "
                 "disconnected. "
-                "Waiting for reconnection..."
+                "Searching for reconnection..."
             )
+
+    # ============================================================
+    # UPDATE
+    # ============================================================
 
     def update(self):
 
         if self.serial_port is None:
 
             self.connect_serial()
-            return
-
-        if not self.port_exists():
-
-            self.disconnect_serial(
-                "USB device disappeared"
-            )
 
             return
 
@@ -220,8 +285,10 @@ class HelicoSensorBridge(Node):
 
             if line:
 
-                valid_data = self.parse_line(
-                    line
+                valid_data = (
+                    self.parse_line(
+                        line
+                    )
                 )
 
                 if valid_data:
@@ -243,7 +310,11 @@ class HelicoSensorBridge(Node):
 
     def check_data_watchdog(self):
 
-        if self.last_valid_data_time is None:
+        if (
+            self.last_valid_data_time
+            is None
+        ):
+
             return
 
         age = (
@@ -252,39 +323,48 @@ class HelicoSensorBridge(Node):
             self.last_valid_data_time
         )
 
-        if age > self.data_timeout:
+        if (
+            age
+            >
+            self.data_timeout
+        ):
 
             self.get_logger().warning(
-                f"No valid bench sensor data "
-                f"for {age:.1f}s. "
-                f"Restarting serial connection."
+                "No valid bench sensor "
+                f"data for {age:.1f}s. "
+                "Restarting discovery."
             )
 
             self.disconnect_serial(
                 "sensor data timeout"
             )
 
+    # ============================================================
+    # PARSING
+    # ============================================================
+
     def parse_line(
         self,
         line,
     ):
 
-        valid_data = False
+        values = {}
 
         try:
 
-            items = line.split(",")
-
-            for item in items:
+            for item in line.split(","):
 
                 item = item.strip()
 
                 if "=" not in item:
+
                     continue
 
-                key, value = item.split(
-                    "=",
-                    1,
+                key, value = (
+                    item.split(
+                        "=",
+                        1,
+                    )
                 )
 
                 key = (
@@ -293,33 +373,54 @@ class HelicoSensorBridge(Node):
                     .lower()
                 )
 
-                value = float(
+                if key not in [
+                    "laser",
+                    "force",
+                ]:
+
+                    continue
+
+                values[key] = float(
                     value.strip()
                 )
 
-                message = Float64()
-                message.data = value
-
-                if key == "laser":
-
-                    self.laser_publisher.publish(
-                        message
-                    )
-
-                    valid_data = True
-
-                elif key == "force":
-
-                    self.force_publisher.publish(
-                        message
-                    )
-
-                    valid_data = True
-
         except ValueError:
+
             return False
 
-        return valid_data
+        if (
+            "laser" not in values
+            or
+            "force" not in values
+        ):
+
+            return False
+
+        laser_message = Float64()
+
+        laser_message.data = (
+            values["laser"]
+        )
+
+        self.laser_publisher.publish(
+            laser_message
+        )
+
+        force_message = Float64()
+
+        force_message.data = (
+            values["force"]
+        )
+
+        self.force_publisher.publish(
+            force_message
+        )
+
+        return True
+
+    # ============================================================
+    # SHUTDOWN
+    # ============================================================
 
     def destroy_node(self):
 
@@ -328,9 +429,11 @@ class HelicoSensorBridge(Node):
             try:
 
                 if self.serial_port.is_open:
+
                     self.serial_port.close()
 
             except Exception:
+
                 pass
 
         super().destroy_node()
@@ -349,6 +452,7 @@ def main():
         )
 
     except KeyboardInterrupt:
+
         pass
 
     finally:
@@ -356,6 +460,7 @@ def main():
         node.destroy_node()
 
         if rclpy.ok():
+
             rclpy.shutdown()
 
 

@@ -1,11 +1,17 @@
-import os
 import time
 
 import serial
 
 import rclpy
+
 from rclpy.node import Node
+
 from std_msgs.msg import Float64
+
+from helico_sensors.serial_discovery import (
+    discover_serial_device,
+    open_serial,
+)
 
 
 class HelicoActuatorBridge(Node):
@@ -18,7 +24,7 @@ class HelicoActuatorBridge(Node):
 
         self.declare_parameter(
             "port",
-            "/dev/ttyUSB0",
+            "auto",
         )
 
         self.declare_parameter(
@@ -36,7 +42,7 @@ class HelicoActuatorBridge(Node):
             3.0,
         )
 
-        self.port_name = (
+        self.configured_port = (
             self.get_parameter("port")
             .get_parameter_value()
             .string_value
@@ -49,20 +55,27 @@ class HelicoActuatorBridge(Node):
         )
 
         self.reconnect_interval = (
-            self.get_parameter("reconnect_interval")
+            self.get_parameter(
+                "reconnect_interval"
+            )
             .get_parameter_value()
             .double_value
         )
 
         self.data_timeout = (
-            self.get_parameter("data_timeout")
+            self.get_parameter(
+                "data_timeout"
+            )
             .get_parameter_value()
             .double_value
         )
 
         self.serial_port = None
 
+        self.connected_port = None
+
         self.last_connect_attempt = 0.0
+
         self.last_valid_data_time = None
 
         self.pressure_publisher = (
@@ -79,72 +92,115 @@ class HelicoActuatorBridge(Node):
         )
 
         self.get_logger().info(
-            f"Helico controller bridge started. "
-            f"Port: {self.port_name}"
+            "Helico controller bridge "
+            "started. "
+            f"Port: {self.configured_port}"
         )
 
         self.connect_serial()
 
-    def port_exists(self):
-
-        return os.path.exists(
-            self.port_name
-        )
+    # ============================================================
+    # CONNECTION
+    # ============================================================
 
     def connect_serial(self):
 
         if self.serial_port is not None:
+
             return
 
         now = time.monotonic()
 
         if (
-            now - self.last_connect_attempt
+            now
+            -
+            self.last_connect_attempt
             <
             self.reconnect_interval
         ):
+
             return
 
         self.last_connect_attempt = now
 
-        if not self.port_exists():
-            return
-
-        try:
-
-            serial_port = serial.Serial(
-                self.port_name,
-                self.baud_rate,
-                timeout=0.05,
-            )
-
-            serial_port.reset_input_buffer()
-
-            self.serial_port = serial_port
-
-            # Gives the ESP32 a few seconds after opening
-            # the connection to begin streaming data.
-            self.last_valid_data_time = (
-                time.monotonic()
-            )
+        if (
+            self.configured_port
+            ==
+            "auto"
+        ):
 
             self.get_logger().info(
-                f"Helico controller connected: "
-                f"{self.port_name}"
+                "Searching for Helico "
+                "controller..."
             )
 
-        except (
-            serial.SerialException,
-            OSError,
-        ) as error:
-
-            self.serial_port = None
-
-            self.get_logger().warning(
-                f"Could not connect to Helico "
-                f"controller on {self.port_name}: "
-                f"{error}"
+            (
+                port_name,
+                serial_port,
+            ) = discover_serial_device(
+                baud_rate=self.baud_rate,
+                role="actuator",
             )
+
+            if serial_port is None:
+
+                return
+
+            self.connected_port = (
+                port_name
+            )
+
+            self.serial_port = (
+                serial_port
+            )
+
+        else:
+
+            try:
+
+                self.serial_port = (
+                    open_serial(
+                        self.configured_port,
+                        self.baud_rate,
+                        timeout=0.05,
+                    )
+                )
+
+                self.connected_port = (
+                    self.configured_port
+                )
+
+                time.sleep(
+                    1.0
+                )
+
+                self.serial_port.reset_input_buffer()
+
+            except (
+                serial.SerialException,
+                OSError,
+            ) as error:
+
+                self.serial_port = None
+                self.connected_port = None
+
+                self.get_logger().warning(
+                    "Could not connect to "
+                    "Helico controller on "
+                    f"{self.configured_port}: "
+                    f"{error}"
+                )
+
+                return
+
+        self.last_valid_data_time = (
+            time.monotonic()
+        )
+
+        self.get_logger().info(
+            "Helico controller connected: "
+            f"{self.connected_port}"
+        )
 
     def disconnect_serial(
         self,
@@ -156,13 +212,22 @@ class HelicoActuatorBridge(Node):
             try:
 
                 if self.serial_port.is_open:
+
                     self.serial_port.close()
 
             except Exception:
+
                 pass
 
         self.serial_port = None
+
         self.last_valid_data_time = None
+
+        old_port = (
+            self.connected_port
+        )
+
+        self.connected_port = None
 
         self.last_connect_attempt = (
             time.monotonic()
@@ -171,30 +236,30 @@ class HelicoActuatorBridge(Node):
         if reason:
 
             self.get_logger().warning(
-                f"Helico controller disconnected: "
+                "Helico controller "
+                f"disconnected from "
+                f"{old_port}: "
                 f"{reason}. "
-                f"Waiting for reconnection..."
+                "Searching for reconnection..."
             )
 
         else:
 
             self.get_logger().warning(
-                "Helico controller disconnected. "
-                "Waiting for reconnection..."
+                "Helico controller "
+                "disconnected. "
+                "Searching for reconnection..."
             )
+
+    # ============================================================
+    # UPDATE
+    # ============================================================
 
     def update(self):
 
         if self.serial_port is None:
 
             self.connect_serial()
-            return
-
-        if not self.port_exists():
-
-            self.disconnect_serial(
-                "USB device disappeared"
-            )
 
             return
 
@@ -212,8 +277,10 @@ class HelicoActuatorBridge(Node):
 
             if line:
 
-                valid_data = self.parse_line(
-                    line
+                valid_data = (
+                    self.parse_line(
+                        line
+                    )
                 )
 
                 if valid_data:
@@ -235,7 +302,11 @@ class HelicoActuatorBridge(Node):
 
     def check_data_watchdog(self):
 
-        if self.last_valid_data_time is None:
+        if (
+            self.last_valid_data_time
+            is None
+        ):
+
             return
 
         age = (
@@ -244,17 +315,25 @@ class HelicoActuatorBridge(Node):
             self.last_valid_data_time
         )
 
-        if age > self.data_timeout:
+        if (
+            age
+            >
+            self.data_timeout
+        ):
 
             self.get_logger().warning(
-                f"No valid pressure data for "
-                f"{age:.1f}s. "
-                f"Restarting serial connection."
+                "No valid pressure data "
+                f"for {age:.1f}s. "
+                "Restarting discovery."
             )
 
             self.disconnect_serial(
                 "pressure data timeout"
             )
+
+    # ============================================================
+    # PARSING
+    # ============================================================
 
     def parse_line(
         self,
@@ -263,18 +342,19 @@ class HelicoActuatorBridge(Node):
 
         try:
 
-            items = line.split(",")
-
-            for item in items:
+            for item in line.split(","):
 
                 item = item.strip()
 
                 if "=" not in item:
+
                     continue
 
-                key, value = item.split(
-                    "=",
-                    1,
+                key, value = (
+                    item.split(
+                        "=",
+                        1,
+                    )
                 )
 
                 key = (
@@ -284,6 +364,7 @@ class HelicoActuatorBridge(Node):
                 )
 
                 if key != "pressure":
+
                     continue
 
                 pressure = float(
@@ -291,6 +372,7 @@ class HelicoActuatorBridge(Node):
                 )
 
                 message = Float64()
+
                 message.data = pressure
 
                 self.pressure_publisher.publish(
@@ -300,9 +382,14 @@ class HelicoActuatorBridge(Node):
                 return True
 
         except ValueError:
-            pass
+
+            return False
 
         return False
+
+    # ============================================================
+    # SHUTDOWN
+    # ============================================================
 
     def destroy_node(self):
 
@@ -311,9 +398,11 @@ class HelicoActuatorBridge(Node):
             try:
 
                 if self.serial_port.is_open:
+
                     self.serial_port.close()
 
             except Exception:
+
                 pass
 
         super().destroy_node()
@@ -332,6 +421,7 @@ def main():
         )
 
     except KeyboardInterrupt:
+
         pass
 
     finally:
@@ -339,6 +429,7 @@ def main():
         node.destroy_node()
 
         if rclpy.ok():
+
             rclpy.shutdown()
 
 
