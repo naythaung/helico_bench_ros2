@@ -689,7 +689,7 @@ namespace meca500_tasks
                     min_clearance) >= 1e-9;
 
             // =========================================================
-            // CALCULATE WEIGHTED COST
+            // CALCULATE RELATIVE COST
             // =========================================================
 
             if (feedback_callback)
@@ -855,7 +855,7 @@ namespace meca500_tasks
                 "TRAJECTORY SELECTION SUMMARY\n"
                 "==============================\n"
                 "Selected candidate : %d\n"
-                "Weighted cost      : %.4f\n"
+                "Relative cost      : %.4f\n"
                 "Clearance          : %.1f mm\n"
                 "Smoothness         : %.6f\n"
                 "Path length        : %.4f rad\n"

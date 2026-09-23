@@ -499,7 +499,7 @@ int main(int argc, char *argv[])
                         min_clearance) >= 1e-9;
 
                 // -------------------------------------------------
-                // CALCULATE WEIGHTED COST
+                // CALCULATE RELATIVE COST
                 //
                 // J =
                 // 0.40(1 - C_hat)
@@ -634,7 +634,7 @@ int main(int argc, char *argv[])
                     "Passed safety gate      : %d/%d\n"
                     "\n"
                     "Selected candidate      : %d\n"
-                    "Weighted cost           : %.4f\n"
+                    "Relative cost           : %.4f\n"
                     "Clearance               : %.1f mm\n"
                     "Closest pair            : %s <-> %s\n"
                     "Smoothness              : %.6f\n"

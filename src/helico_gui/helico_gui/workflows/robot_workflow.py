@@ -25,8 +25,16 @@ class RobotWorkflowMixin:
     """Pose, trajectory planning, inspection and single-motion workflows."""
 
     def update_default_trajectory_name(self):
-        start = self.start_pose_box.currentText().strip()
-        target = self.target_pose_box.currentText().strip()
+        start = (
+            self.start_pose_box
+            .currentText()
+            .strip()
+        )
+        target = (
+            self.target_pose_box
+            .currentText()
+            .strip()
+        )
 
         if start and target:
             self.trajectory_name_entry.setText(
@@ -41,29 +49,45 @@ class RobotWorkflowMixin:
         if not self.node.list_poses_client.service_is_ready():
             return
 
-        future = self.node.list_poses_client.call_async(
-            ListPoses.Request()
+        future = (
+            self.node.list_poses_client
+            .call_async(
+                ListPoses.Request()
+            )
         )
+
         future.add_done_callback(
             self.poses_received
         )
 
-    def poses_received(self, future):
+    def poses_received(
+        self,
+        future,
+    ):
         try:
             response = future.result()
 
-            names = list(response.names)
-            types = list(response.types)
+            names = list(
+                response.names
+            )
+            types = list(
+                response.types
+            )
 
             joint_poses = [
                 name
                 for name, pose_type
-                in zip(names, types)
+                in zip(
+                    names,
+                    types,
+                )
                 if pose_type == "joint"
             ]
 
             self.pose_list.clear()
-            self.pose_list.addItems(names)
+            self.pose_list.addItems(
+                names
+            )
 
             self.start_pose_box.clear()
             self.start_pose_box.addItems(
@@ -94,17 +118,26 @@ class RobotWorkflowMixin:
         if not self.node.list_trajectories_client.service_is_ready():
             return
 
-        future = self.node.list_trajectories_client.call_async(
-            ListTrajectories.Request()
+        future = (
+            self.node.list_trajectories_client
+            .call_async(
+                ListTrajectories.Request()
+            )
         )
+
         future.add_done_callback(
             self.trajectories_received
         )
 
-    def trajectories_received(self, future):
+    def trajectories_received(
+        self,
+        future,
+    ):
         try:
             response = future.result()
-            names = list(response.names)
+            names = list(
+                response.names
+            )
 
             self.trajectory_list.clear()
             self.trajectory_list.addItems(
@@ -114,21 +147,29 @@ class RobotWorkflowMixin:
             for box in self.cycle_trajectory_boxes:
                 current = box.currentText()
 
-                box.blockSignals(True)
+                box.blockSignals(
+                    True
+                )
                 box.clear()
                 box.addItem(
                     "-- select trajectory --"
                 )
-                box.addItems(names)
+                box.addItems(
+                    names
+                )
 
                 if current in names:
                     box.setCurrentText(
                         current
                     )
 
-                box.blockSignals(False)
+                box.blockSignals(
+                    False
+                )
 
-            self.set_status("Ready")
+            self.set_status(
+                "Ready"
+            )
 
         except Exception as error:
             self.set_status(
@@ -139,13 +180,39 @@ class RobotWorkflowMixin:
     # TRAJECTORY PLANNING
     # ============================================================
 
+    def normalised_planning_weights(
+        self,
+    ):
+        values = [
+            self.clearance_weight_slider.value(),
+            self.smoothness_weight_slider.value(),
+            self.path_length_weight_slider.value(),
+            self.duration_weight_slider.value(),
+        ]
+
+        total = sum(
+            values
+        )
+
+        if total <= 0:
+            return None
+
+        return [
+            value / total
+            for value in values
+        ]
+
     def plan_trajectory(self):
         start_pose = (
-            self.start_pose_box.currentText()
+            self.start_pose_box
+            .currentText()
         )
+
         target_pose = (
-            self.target_pose_box.currentText()
+            self.target_pose_box
+            .currentText()
         )
+
         trajectory_name = (
             self.trajectory_name_entry
             .text()
@@ -176,6 +243,16 @@ class RobotWorkflowMixin:
             )
             return
 
+        weights = (
+            self.normalised_planning_weights()
+        )
+
+        if weights is None:
+            self.set_status(
+                "At least one scoring weight must be greater than zero."
+            )
+            return
+
         goal = PlanTrajectory.Goal()
 
         goal.start_pose = start_pose
@@ -192,19 +269,35 @@ class RobotWorkflowMixin:
         )
 
         goal.velocity_scaling = speed
-        goal.acceleration_scaling = speed
+
+        if (
+            self.separate_acceleration_checkbox
+            .isChecked()
+        ):
+            goal.acceleration_scaling = (
+                self.acceleration_slider.value()
+                / 100.0
+            )
+        else:
+            goal.acceleration_scaling = (
+                speed
+            )
 
         goal.minimum_required_clearance = (
             self.clearance_spinbox.value()
             / 1000.0
         )
 
-        goal.weight_clearance = 0.4
-        goal.weight_smoothness = 0.3
-        goal.weight_path_length = 0.2
-        goal.weight_duration = 0.1
+        (
+            goal.weight_clearance,
+            goal.weight_smoothness,
+            goal.weight_path_length,
+            goal.weight_duration,
+        ) = weights
 
-        self.progress.setValue(0)
+        self.progress.setValue(
+            0
+        )
 
         self.planning_candidates = {}
         self.planning_total_candidates = (
@@ -242,7 +335,8 @@ class RobotWorkflowMixin:
         )
 
         future = (
-            self.node.plan_client.send_goal_async(
+            self.node.plan_client
+            .send_goal_async(
                 goal,
                 feedback_callback=self.plan_feedback,
             )
@@ -257,7 +351,9 @@ class RobotWorkflowMixin:
     # ============================================================
 
     def previous_candidate(self):
-        total = self.planning_total_candidates
+        total = (
+            self.planning_total_candidates
+        )
 
         if total <= 0:
             return
@@ -266,7 +362,8 @@ class RobotWorkflowMixin:
             candidate_number = total
         else:
             candidate_number = (
-                self.current_candidate_view - 1
+                self.current_candidate_view
+                - 1
             )
 
         self.show_candidate(
@@ -274,7 +371,9 @@ class RobotWorkflowMixin:
         )
 
     def next_candidate(self):
-        total = self.planning_total_candidates
+        total = (
+            self.planning_total_candidates
+        )
 
         if total <= 0:
             return
@@ -287,7 +386,8 @@ class RobotWorkflowMixin:
             candidate_number = 1
         else:
             candidate_number = (
-                self.current_candidate_view + 1
+                self.current_candidate_view
+                + 1
             )
 
         self.show_candidate(
@@ -298,7 +398,9 @@ class RobotWorkflowMixin:
         self,
         candidate_number,
     ):
-        total = self.planning_total_candidates
+        total = (
+            self.planning_total_candidates
+        )
 
         if (
             total <= 0
@@ -369,17 +471,27 @@ class RobotWorkflowMixin:
             return
 
         if candidate["passed"]:
-            result_text = "PASS"
-            colour = CANDIDATE_GREEN
+            result_text = (
+                "PASS"
+            )
+            colour = (
+                CANDIDATE_GREEN
+            )
         else:
-            result_text = "FAIL"
-            colour = CANDIDATE_RED
+            result_text = (
+                "FAIL"
+            )
+            colour = (
+                CANDIDATE_RED
+            )
 
         lines = [
             result_text,
         ]
 
-        message = candidate["message"]
+        message = (
+            candidate["message"]
+        )
 
         if message:
             lines.append(
@@ -419,14 +531,16 @@ class RobotWorkflowMixin:
                 [
                     "",
                     (
-                        "Weighted cost: "
+                        "Relative cost: "
                         f"{self.selected_candidate_cost:.4f}"
                     ),
                 ]
             )
 
         self.planning_candidate_label.setText(
-            "\n".join(lines)
+            "\n".join(
+                lines
+            )
         )
 
         self.planning_candidate_label.setStyleSheet(
@@ -438,192 +552,201 @@ class RobotWorkflowMixin:
         )
 
     def plan_feedback(
-            self,
-            feedback_msg,
+        self,
+        feedback_msg,
+    ):
+        feedback = (
+            feedback_msg.feedback
+        )
+
+        self.set_status(
+            feedback.status
+        )
+
+        status = (
+            feedback.status.lower()
+        )
+
+        if feedback.total_candidates > 0:
+            self.planning_total_candidates = (
+                feedback.total_candidates
+            )
+
+        candidate_number = (
+            feedback.current_candidate
+        )
+
+        candidate_feedback = (
+            "planning candidate" in status
+            or
+            "evaluating candidate" in status
+            or
+            "candidate passed" in status
+            or
+            "candidate rejected" in status
+            or
+            (
+                "candidate " in status
+                and
+                "failed" in status
+            )
+        )
+
+        if (
+            candidate_number > 0
+            and
+            candidate_feedback
         ):
-            feedback = feedback_msg.feedback
-
-            self.set_status(
-                feedback.status
+            has_metrics = (
+                feedback.candidate_complete
+                and
+                feedback.candidate_message
+                != "Planning failed"
             )
 
-            status = feedback.status.lower()
+            self.planning_candidates[
+                candidate_number
+            ] = {
+                "complete":
+                    feedback.candidate_complete,
 
-            if feedback.total_candidates > 0:
-                self.planning_total_candidates = (
-                    feedback.total_candidates
-                )
+                "passed":
+                    feedback.candidate_passed,
 
-            candidate_number = (
-                feedback.current_candidate
+                "status":
+                    feedback.status,
+
+                "clearance":
+                    feedback.minimum_clearance,
+
+                "smoothness":
+                    feedback.smoothness,
+
+                "path_length":
+                    feedback.path_length,
+
+                "duration":
+                    feedback.duration,
+
+                "message":
+                    feedback.candidate_message,
+
+                "has_metrics":
+                    has_metrics,
+            }
+
+            self.show_candidate(
+                candidate_number
             )
 
-            candidate_feedback = (
-                "planning candidate" in status
-                or
-                "evaluating candidate" in status
-                or
-                "candidate passed" in status
-                or
-                "candidate rejected" in status
-                or
-                (
-                    "candidate " in status
-                    and
-                    "failed" in status
-                )
+        if "initialising" in status:
+            progress = 5
+
+        elif (
+            feedback.total_candidates > 0
+            and
+            candidate_number > 0
+            and
+            candidate_feedback
+        ):
+            total_steps = (
+                feedback.total_candidates
+                * 2
             )
 
-            if (
-                candidate_number > 0
-                and
-                candidate_feedback
-            ):
-                has_metrics = (
-                    feedback.candidate_complete
-                    and
-                    feedback.candidate_message
-                    != "Planning failed"
-                )
+            candidate_index = max(
+                candidate_number - 1,
+                0,
+            )
 
-                self.planning_candidates[
-                    candidate_number
-                ] = {
-                    "complete":
-                        feedback.candidate_complete,
-
-                    "passed":
-                        feedback.candidate_passed,
-
-                    "status":
-                        feedback.status,
-
-                    "clearance":
-                        feedback.minimum_clearance,
-
-                    "smoothness":
-                        feedback.smoothness,
-
-                    "path_length":
-                        feedback.path_length,
-
-                    "duration":
-                        feedback.duration,
-
-                    "message":
-                        feedback.candidate_message,
-
-                    "has_metrics":
-                        has_metrics,
-                }
-
-                self.show_candidate(
-                    candidate_number
-                )
-
-            if "initialising" in status:
-                progress = 5
-
-            elif (
-                feedback.total_candidates > 0
-                and
-                candidate_number > 0
-                and
-                candidate_feedback
-            ):
-                total_steps = (
-                    feedback.total_candidates
+            if "planning candidate" in status:
+                completed_steps = (
+                    candidate_index
                     * 2
                 )
 
-                candidate_index = max(
-                    candidate_number - 1,
-                    0,
-                )
-
-                if "planning candidate" in status:
-                    completed_steps = (
-                        candidate_index * 2
-                    )
-
-                elif "evaluating candidate" in status:
-                    completed_steps = (
-                        candidate_index * 2 + 1
-                    )
-
-                else:
-                    completed_steps = (
-                        candidate_index * 2 + 2
-                    )
-
-                fraction = min(
-                    completed_steps
-                    / total_steps,
-                    1.0,
-                )
-
-                progress = int(
-                    5
-                    + fraction * 80
-                )
-
-            elif "scoring" in status:
-                progress = 90
-
-                self.candidate_number_label.setText(
-                    "Comparing candidates"
-                )
-
-                self.planning_candidate_label.setText(
-                    "Scoring successful candidates..."
-                )
-
-                self.planning_candidate_label.setStyleSheet(
-                    "padding: 10px; "
-                    f"border: 2px solid {CANDIDATE_ORANGE}; "
-                    "border-radius: 6px; "
-                    f"color: {CANDIDATE_ORANGE}; "
-                    "font-weight: bold;"
-                )
-
-            elif "saving" in status:
-                progress = 97
-
-                self.candidate_number_label.setText(
-                    "Selecting best candidate"
-                )
-
-                self.planning_candidate_label.setText(
-                    "Saving selected trajectory..."
-                )
-
-                self.planning_candidate_label.setStyleSheet(
-                    "padding: 10px; "
-                    f"border: 2px solid {CANDIDATE_ORANGE}; "
-                    "border-radius: 6px; "
-                    f"color: {CANDIDATE_ORANGE}; "
-                    "font-weight: bold;"
+            elif "evaluating candidate" in status:
+                completed_steps = (
+                    candidate_index
+                    * 2
+                    + 1
                 )
 
             else:
-                progress = min(
-                    self.progress.value(),
-                    99,
+                completed_steps = (
+                    candidate_index
+                    * 2
+                    + 2
                 )
 
-            self.progress.setValue(
-                min(
-                    progress,
-                    99,
-                )
+            fraction = min(
+                completed_steps
+                / total_steps,
+                1.0,
             )
-    
+
+            progress = int(
+                5
+                + fraction * 80
+            )
+
+        elif "scoring" in status:
+            progress = 90
+
+            self.candidate_number_label.setText(
+                "Comparing candidates"
+            )
+
+            self.planning_candidate_label.setText(
+                "Scoring successful candidates..."
+            )
+            self.planning_candidate_label.setStyleSheet(
+                "padding: 10px; "
+                f"border: 2px solid {CANDIDATE_ORANGE}; "
+                "border-radius: 6px; "
+                f"color: {CANDIDATE_ORANGE}; "
+                "font-weight: bold;"
+            )
+
+        elif "saving" in status:
+            progress = 97
+
+            self.candidate_number_label.setText(
+                "Selecting best candidate"
+            )
+
+            self.planning_candidate_label.setText(
+                "Saving selected trajectory..."
+            )
+            self.planning_candidate_label.setStyleSheet(
+                "padding: 10px; "
+                f"border: 2px solid {CANDIDATE_ORANGE}; "
+                "border-radius: 6px; "
+                f"color: {CANDIDATE_ORANGE}; "
+                "font-weight: bold;"
+            )
+
+        else:
+            progress = min(
+                self.progress.value(),
+                99,
+            )
+
+        self.progress.setValue(
+            min(
+                progress,
+                99,
+            )
+        )
+
     def plan_goal_response(
         self,
         future,
     ):
         try:
-            goal_handle = future.result()
+            goal_handle = (
+                future.result()
+            )
 
             if not goal_handle.accepted:
                 self.set_status(
@@ -632,8 +755,10 @@ class RobotWorkflowMixin:
                 return
 
             result_future = (
-                goal_handle.get_result_async()
+                goal_handle
+                .get_result_async()
             )
+
             result_future.add_done_callback(
                 self.plan_result
             )
@@ -655,11 +780,14 @@ class RobotWorkflowMixin:
             )
 
             if result.success:
-                self.progress.setValue(100)
+                self.progress.setValue(
+                    100
+                )
 
                 self.selected_candidate_number = (
                     result.selected_candidate
                 )
+
                 self.selected_candidate_cost = (
                     result.weighted_cost
                 )
@@ -674,8 +802,12 @@ class RobotWorkflowMixin:
                     self.planning_candidates[
                         result.selected_candidate
                     ] = {
-                        "complete": True,
-                        "passed": True,
+                        "complete":
+                            True,
+
+                        "passed":
+                            True,
+
                         "status":
                             "Candidate passed",
 
@@ -722,6 +854,7 @@ class RobotWorkflowMixin:
                     "PLANNING FAILED\n\n"
                     + result.message
                 )
+
                 self.planning_candidate_label.setStyleSheet(
                     "padding: 10px; "
                     f"border: 2px solid {CANDIDATE_RED}; "
@@ -744,6 +877,7 @@ class RobotWorkflowMixin:
                 f"Planning result error:\n"
                 f"{error}"
             )
+
             self.planning_candidate_label.setStyleSheet(
                 "padding: 10px; "
                 f"border: 2px solid {CANDIDATE_RED}; "
@@ -761,9 +895,12 @@ class RobotWorkflowMixin:
     # SAVED TRAJECTORY LIBRARY
     # ============================================================
 
-    def selected_trajectory(self):
+    def selected_trajectory(
+        self,
+    ):
         item = (
-            self.trajectory_list.currentItem()
+            self.trajectory_list
+            .currentItem()
         )
 
         if item is None:
@@ -784,13 +921,19 @@ class RobotWorkflowMixin:
         if not self.node.inspect_trajectory_client.service_is_ready():
             return
 
-        request = InspectTrajectory.Request()
+        request = (
+            InspectTrajectory.Request()
+        )
         request.name = name
 
         future = (
-            self.node.inspect_trajectory_client
-            .call_async(request)
+            self.node
+            .inspect_trajectory_client
+            .call_async(
+                request
+            )
         )
+
         future.add_done_callback(
             self.trajectory_details_received
         )
@@ -800,7 +943,9 @@ class RobotWorkflowMixin:
         future,
     ):
         try:
-            response = future.result()
+            response = (
+                future.result()
+            )
 
             if not response.success:
                 self.details_label.setText(
@@ -884,8 +1029,12 @@ class RobotWorkflowMixin:
     # SINGLE TRAJECTORY EXECUTION
     # ============================================================
 
-    def go_to_start(self):
-        name = self.selected_trajectory()
+    def go_to_start(
+        self,
+    ):
+        name = (
+            self.selected_trajectory()
+        )
 
         if name is None:
             return
@@ -896,7 +1045,9 @@ class RobotWorkflowMixin:
             )
             return
 
-        goal = GoToTrajectoryStart.Goal()
+        goal = (
+            GoToTrajectoryStart.Goal()
+        )
         goal.trajectory_name = name
 
         self.set_status(
@@ -904,18 +1055,24 @@ class RobotWorkflowMixin:
         )
 
         future = (
-            self.node.go_to_start_client
+            self.node
+            .go_to_start_client
             .send_goal_async(
                 goal,
                 feedback_callback=self.motion_feedback,
             )
         )
+
         future.add_done_callback(
             self.motion_goal_response
         )
 
-    def execute_trajectory(self):
-        name = self.selected_trajectory()
+    def execute_trajectory(
+        self,
+    ):
+        name = (
+            self.selected_trajectory()
+        )
 
         if name is None:
             return
@@ -938,7 +1095,9 @@ class RobotWorkflowMixin:
             )
             return
 
-        goal = ExecuteTrajectory.Goal()
+        goal = (
+            ExecuteTrajectory.Goal()
+        )
         goal.trajectory_name = name
 
         self.set_status(
@@ -946,12 +1105,14 @@ class RobotWorkflowMixin:
         )
 
         future = (
-            self.node.execute_client
+            self.node
+            .execute_client
             .send_goal_async(
                 goal,
                 feedback_callback=self.motion_feedback,
             )
         )
+
         future.add_done_callback(
             self.motion_goal_response
         )
@@ -969,7 +1130,9 @@ class RobotWorkflowMixin:
         future,
     ):
         try:
-            goal_handle = future.result()
+            goal_handle = (
+                future.result()
+            )
 
             if not goal_handle.accepted:
                 self.set_status(
@@ -978,8 +1141,10 @@ class RobotWorkflowMixin:
                 return
 
             result_future = (
-                goal_handle.get_result_async()
+                goal_handle
+                .get_result_async()
             )
+
             result_future.add_done_callback(
                 self.motion_result
             )
@@ -1013,14 +1178,18 @@ class RobotWorkflowMixin:
     # POSE LIBRARY
     # ============================================================
 
-    def capture_pose(self):
+    def capture_pose(
+        self,
+    ):
         name, ok = QInputDialog.getText(
             self,
             "Save Current Robot Pose",
             "Pose name:",
         )
 
-        name = name.strip()
+        name = (
+            name.strip()
+        )
 
         if not ok or not name:
             return
@@ -1031,13 +1200,19 @@ class RobotWorkflowMixin:
             )
             return
 
-        request = CapturePose.Request()
+        request = (
+            CapturePose.Request()
+        )
         request.name = name
 
         future = (
-            self.node.capture_pose_client
-            .call_async(request)
+            self.node
+            .capture_pose_client
+            .call_async(
+                request
+            )
         )
+
         future.add_done_callback(
             self.capture_pose_result
         )
@@ -1047,7 +1222,9 @@ class RobotWorkflowMixin:
         future,
     ):
         try:
-            response = future.result()
+            response = (
+                future.result()
+            )
 
             self.set_status(
                 response.message
@@ -1061,8 +1238,12 @@ class RobotWorkflowMixin:
                 f"Save pose failed: {error}"
             )
 
-    def delete_pose(self):
-        item = self.pose_list.currentItem()
+    def delete_pose(
+        self,
+    ):
+        item = (
+            self.pose_list.currentItem()
+        )
 
         if item is None:
             self.set_status(
@@ -1070,7 +1251,9 @@ class RobotWorkflowMixin:
             )
             return
 
-        name = item.text()
+        name = (
+            item.text()
+        )
 
         answer = QMessageBox.question(
             self,
@@ -1084,13 +1267,19 @@ class RobotWorkflowMixin:
         if answer != QMessageBox.Yes:
             return
 
-        request = DeletePose.Request()
+        request = (
+            DeletePose.Request()
+        )
         request.name = name
 
         future = (
-            self.node.delete_pose_client
-            .call_async(request)
+            self.node
+            .delete_pose_client
+            .call_async(
+                request
+            )
         )
+
         future.add_done_callback(
             self.delete_pose_result
         )
@@ -1100,7 +1289,9 @@ class RobotWorkflowMixin:
         future,
     ):
         try:
-            response = future.result()
+            response = (
+                future.result()
+            )
 
             self.set_status(
                 response.message
@@ -1114,8 +1305,12 @@ class RobotWorkflowMixin:
                 f"Delete pose failed: {error}"
             )
 
-    def delete_trajectory(self):
-        name = self.selected_trajectory()
+    def delete_trajectory(
+        self,
+    ):
+        name = (
+            self.selected_trajectory()
+        )
 
         if name is None:
             return
@@ -1132,13 +1327,19 @@ class RobotWorkflowMixin:
         if answer != QMessageBox.Yes:
             return
 
-        request = DeleteTrajectory.Request()
+        request = (
+            DeleteTrajectory.Request()
+        )
         request.name = name
 
         future = (
-            self.node.delete_trajectory_client
-            .call_async(request)
+            self.node
+            .delete_trajectory_client
+            .call_async(
+                request
+            )
         )
+
         future.add_done_callback(
             self.delete_trajectory_result
         )
@@ -1148,7 +1349,9 @@ class RobotWorkflowMixin:
         future,
     ):
         try:
-            response = future.result()
+            response = (
+                future.result()
+            )
 
             self.set_status(
                 response.message
