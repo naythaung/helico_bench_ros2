@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
     QVBoxLayout,
+    QDoubleSpinBox,
     QHBoxLayout,
     QFormLayout,
     QLabel,
@@ -143,9 +144,11 @@ class HelicoWindow(
             self.sync_acceleration_to_speed
         )
 
-        self.clearance_spinbox = QSpinBox()
-        self.clearance_spinbox.setRange(0, 200)
-        self.clearance_spinbox.setValue(10)
+        self.clearance_spinbox = QDoubleSpinBox()
+        self.clearance_spinbox.setRange(0.0, 200.0)
+        self.clearance_spinbox.setDecimals(2)
+        self.clearance_spinbox.setSingleStep(0.1)
+        self.clearance_spinbox.setValue(10.0)
         self.clearance_spinbox.setSuffix(" mm")
 
         planning_form.addRow(
