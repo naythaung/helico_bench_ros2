@@ -1,5 +1,12 @@
 import time
 
+from PySide6.QtSvgWidgets import QSvgWidget
+from PySide6.QtWidgets import QGridLayout
+
+from pathlib import Path
+
+from PySide6.QtGui import QPixmap
+
 import rclpy
 
 from PySide6.QtCore import QTimer, Qt
@@ -81,11 +88,126 @@ class HelicoWindow(
         self.setCentralWidget(central)
         outer = QVBoxLayout(central)
 
-        title = QLabel("HELICO BENCH")
-        title.setStyleSheet(
-            "font-size: 26px; font-weight: bold; margin: 10px;"
+        header = QGridLayout()
+
+        # ============================================================
+        # LEFT LOGO AREA
+        # ============================================================
+
+        left_area = QWidget()
+        left_area.setFixedWidth(180)
+
+        left_layout = QHBoxLayout(left_area)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+
+        logo_path = (
+            Path(__file__).parent
+            / "assets"
+            / "InteractiveMedicalRobotics.png"
         )
-        outer.addWidget(title)
+
+        if logo_path.exists():
+            logo_label = QLabel()
+
+            logo_pixmap = QPixmap(
+                str(logo_path)
+            )
+
+            logo_label.setPixmap(
+                logo_pixmap.scaledToHeight(
+                    55,
+                    Qt.SmoothTransformation,
+                )
+            )
+
+            left_layout.addWidget(
+                logo_label,
+                alignment=Qt.AlignLeft | Qt.AlignVCenter,
+            )
+
+        header.addWidget(
+            left_area,
+            0,
+            0,
+        )
+
+
+        # ============================================================
+        # CENTRE TITLE
+        # ============================================================
+
+        title_area = QWidget()
+
+        title_layout = QVBoxLayout(title_area)
+        title_layout.setContentsMargins(0, 0, 0, 0)
+
+        title = QLabel("Helico Bench Test Rig")
+        title.setStyleSheet(
+            "font-size: 26px; "
+            "font-weight: bold;"
+        )
+        title.setAlignment(Qt.AlignCenter)
+
+        subtitle = QLabel(
+            "Automated Balloon Characterisation Workbench"
+        )
+        subtitle.setStyleSheet(
+            "font-size: 13px;"
+            "font-weight: bold;"
+            "color: #666666;"
+        )
+        subtitle.setAlignment(Qt.AlignCenter)
+
+        title_layout.addWidget(title)
+        title_layout.addWidget(subtitle)
+
+        header.addWidget(
+            title_area,
+            0,
+            1,
+        )
+
+
+        # ============================================================
+        # RIGHT LOGO AREA
+        # ============================================================
+
+        right_area = QWidget()
+        right_area.setFixedWidth(180)
+
+        right_layout = QHBoxLayout(right_area)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+
+        imr_logo_path = (
+            Path(__file__).parent
+            / "assets"
+            / "Helico_logo_white.svg"
+        )
+
+        if imr_logo_path.exists():
+            helico_logo = QSvgWidget(
+                str(imr_logo_path)
+            )
+
+            helico_logo.setFixedSize(
+                150,
+                65,
+            )
+
+            right_layout.addWidget(
+                helico_logo,
+                alignment=Qt.AlignRight | Qt.AlignVCenter,
+            )
+
+        header.addWidget(
+            right_area,
+            0,
+            2,
+        )
+
+        header.setColumnStretch(1, 1)
+
+        outer.addLayout(header)
 
         self.hardware_status = HardwareStatusWidget()
         outer.addWidget(self.hardware_status)
