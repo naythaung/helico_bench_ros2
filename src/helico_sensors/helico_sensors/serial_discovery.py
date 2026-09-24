@@ -1,4 +1,5 @@
 import os
+import fcntl
 import time
 
 import serial
@@ -162,24 +163,39 @@ def discover_serial_device(
     baud_rate,
     role,
 ):
+    lock_file = open(
+        "/tmp/helico_serial_discovery.lock",
+        "w",
+    )
 
-    for port_name in available_ports():
-
-        serial_port = probe_port(
-            port_name,
-            baud_rate,
-            role,
+    try:
+        fcntl.flock(
+            lock_file,
+            fcntl.LOCK_EX,
         )
 
-        if serial_port is not None:
-
-            return (
+        for port_name in available_ports():
+            serial_port = probe_port(
                 port_name,
-                serial_port,
+                baud_rate,
+                role,
             )
 
-    return (
-        None,
-        None,
-    )
-    
+            if serial_port is not None:
+                return (
+                    port_name,
+                    serial_port,
+                )
+
+        return (
+            None,
+            None,
+        )
+
+    finally:
+        fcntl.flock(
+            lock_file,
+            fcntl.LOCK_UN,
+        )
+
+        lock_file.close()

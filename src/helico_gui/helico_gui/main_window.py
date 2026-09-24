@@ -1344,6 +1344,9 @@ class HelicoWindow(
             )
 
     def wait_for_backend(self):
+        if not rclpy.ok():
+            return
+
         ready = (
             self.node.list_poses_client.service_is_ready()
             and
